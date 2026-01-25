@@ -21,6 +21,7 @@ DONE: Implement backend CLI for WMBR
       - Outputs cron line with 2.5hr delay for archive availability
       - Handles late-night rollover (e.g., 23:00 -> 01:30 next day)
       - Confidence levels based on schedule consistency
+      - Includes ready-to-run crontab install command
 DONE: Implement schedule-download CLI command
 TODO: Implement cron scheduler to download specific show archives each week
 TODO: Implement backend CLI for WHRB
