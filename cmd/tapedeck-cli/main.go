@@ -83,8 +83,36 @@ func cmdListShows(args []string) error {
 		return fmt.Errorf("usage: list-shows <STATION>")
 	}
 
-	station := strings.ToUpper(args[0])
-	adapter, err := tapedeck.GetAdapter(station)
+	callSign := strings.ToUpper(args[0])
+
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	// Get or create station
+	station, err := database.GetOrCreateStation(callSign, "", "")
+	if err != nil {
+		return err
+	}
+
+	// Check cache first
+	cachedShows, valid, err := database.GetCachedShows(station.ID)
+	if err != nil {
+		return err
+	}
+
+	if valid && len(cachedShows) > 0 {
+		fmt.Printf("Shows available on %s (%d) [cached]:\n", callSign, len(cachedShows))
+		for _, show := range cachedShows {
+			fmt.Printf("  %s\n", show.Name)
+		}
+		return nil
+	}
+
+	// Fetch from adapter
+	adapter, err := tapedeck.GetAdapter(callSign)
 	if err != nil {
 		return err
 	}
@@ -94,7 +122,12 @@ func cmdListShows(args []string) error {
 		return fmt.Errorf("list shows: %w", err)
 	}
 
-	fmt.Printf("Shows available on %s (%d):\n", station, len(shows))
+	// Cache the results
+	if err := database.CacheShows(station.ID, shows); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not cache shows: %v\n", err)
+	}
+
+	fmt.Printf("Shows available on %s (%d):\n", callSign, len(shows))
 	for _, show := range shows {
 		fmt.Printf("  %s\n", show)
 	}
@@ -103,9 +136,9 @@ func cmdListShows(args []string) error {
 }
 
 func cmdListDownloads(args []string) error {
-	var station string
+	var callSign string
 	if len(args) > 0 {
-		station = strings.ToUpper(args[0])
+		callSign = strings.ToUpper(args[0])
 	}
 
 	database, err := openDB()
@@ -114,14 +147,14 @@ func cmdListDownloads(args []string) error {
 	}
 	defer database.Close()
 
-	downloads, err := database.ListDownloads(station)
+	downloads, err := database.ListDownloads(callSign)
 	if err != nil {
 		return fmt.Errorf("list downloads: %w", err)
 	}
 
 	if len(downloads) == 0 {
-		if station != "" {
-			fmt.Printf("No downloads found for station %s\n", station)
+		if callSign != "" {
+			fmt.Printf("No downloads found for station %s\n", callSign)
 		} else {
 			fmt.Println("No downloads found")
 		}
@@ -130,7 +163,7 @@ func cmdListDownloads(args []string) error {
 
 	fmt.Printf("Downloads (%d):\n", len(downloads))
 	for _, d := range downloads {
-		fmt.Printf("  [%s] %s - %s (%s)\n", d.Station, d.Show, d.Date.Format("2006-01-02"), d.Filepath)
+		fmt.Printf("  [%s] %s - %s (%s)\n", d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"), d.Filepath)
 	}
 
 	return nil
@@ -146,8 +179,8 @@ func cmdDownloadShow(args []string) error {
 		return fmt.Errorf("usage: download-show <STATION> <SHOW> [--latest | --date YYYYMMDD] [--output DIR]")
 	}
 
-	station := strings.ToUpper(args[0])
-	show := args[1]
+	callSign := strings.ToUpper(args[0])
+	showName := args[1]
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return err
@@ -164,7 +197,7 @@ func cmdDownloadShow(args []string) error {
 		outputDir = filepath.Join(defaultDataDir, "downloads")
 	}
 
-	adapter, err := tapedeck.GetAdapter(station)
+	adapter, err := tapedeck.GetAdapter(callSign)
 	if err != nil {
 		return err
 	}
@@ -172,7 +205,7 @@ func cmdDownloadShow(args []string) error {
 	var archive *tapedeck.Archive
 
 	if *latest {
-		archive, err = adapter.GetLatestArchive(show)
+		archive, err = adapter.GetLatestArchive(showName)
 		if err != nil {
 			return fmt.Errorf("get latest archive: %w", err)
 		}
@@ -183,7 +216,7 @@ func cmdDownloadShow(args []string) error {
 			return fmt.Errorf("invalid date format (use YYYYMMDD): %w", err)
 		}
 
-		archives, err := adapter.ListArchives(show)
+		archives, err := adapter.ListArchives(showName)
 		if err != nil {
 			return fmt.Errorf("list archives: %w", err)
 		}
@@ -198,18 +231,18 @@ func cmdDownloadShow(args []string) error {
 		}
 
 		if archive == nil {
-			return fmt.Errorf("no archive found for %s on %s", show, *date)
+			return fmt.Errorf("no archive found for %s on %s", showName, *date)
 		}
 	}
 
-	fmt.Printf("Downloading %s - %s (%s)...\n", station, archive.ShowName, archive.Date.Format("2006-01-02"))
+	fmt.Printf("Downloading %s - %s (%s)...\n", callSign, archive.ShowName, archive.Date.Format("2006-01-02"))
 
-	filepath, err := adapter.DownloadArchive(archive, outputDir)
+	destPath, err := adapter.DownloadArchive(archive, outputDir)
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
 
-	fmt.Printf("Downloaded to: %s\n", filepath)
+	fmt.Printf("Downloaded to: %s\n", destPath)
 
 	// Record in database
 	database, err := openDB()
@@ -219,12 +252,26 @@ func cmdDownloadShow(args []string) error {
 	}
 	defer database.Close()
 
+	// Get or create station
+	station, err := database.GetOrCreateStation(callSign, "", "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not get station: %v\n", err)
+		return nil
+	}
+
+	// Try to get show ID (may not exist if cache was cleared)
+	var showID *int64
+	show, err := database.GetShowByName(station.ID, archive.ShowName)
+	if err == nil && show != nil {
+		showID = &show.ID
+	}
+
 	_, err = database.InsertDownload(&db.Download{
-		Station:  station,
-		Show:     archive.ShowName,
-		Date:     archive.Date,
-		Filepath: filepath,
-		Status:   "completed",
+		StationID:   station.ID,
+		ShowID:      showID,
+		ArchiveDate: archive.Date,
+		Filepath:    destPath,
+		Status:      "completed",
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: could not record download in database: %v\n", err)
