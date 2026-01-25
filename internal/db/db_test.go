@@ -470,3 +470,46 @@ func TestGetDownload_NotFound(t *testing.T) {
 		t.Error("expected error for non-existent download")
 	}
 }
+
+func TestFindDownload(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show1"})
+	show, _ := db.GetShowByName(station.ID, "Show1")
+
+	archiveDate := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+
+	// No download exists yet
+	found, err := db.FindDownload(station.ID, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found != nil {
+		t.Error("expected nil for non-existent download")
+	}
+
+	// Insert a download
+	db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      &show.ID,
+		ArchiveDate: archiveDate,
+		M3UURL:      "http://test.m3u",
+	})
+
+	// Now it should be found
+	found, err = db.FindDownload(station.ID, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find download")
+	}
+	if found.StationID != station.ID {
+		t.Errorf("expected station ID %d, got %d", station.ID, found.StationID)
+	}
+}

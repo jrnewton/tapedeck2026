@@ -541,6 +541,32 @@ func (db *DB) ListDownloadsByStatus(statuses ...string) ([]Download, error) {
 	return db.queryDownloads(conn, query, args)
 }
 
+// FindDownload finds an existing download for a station and archive date.
+func (db *DB) FindDownload(stationID int64, archiveDate time.Time) (*Download, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+		       s.call_sign, COALESCE(sh.name, '')
+		FROM downloads d
+		JOIN stations s ON d.station_id = s.id
+		LEFT JOIN shows sh ON d.show_id = sh.id
+		WHERE d.station_id = ? AND d.archive_date = ?`
+
+	downloads, err := db.queryDownloads(conn, query, []any{stationID, archiveDate.Format("2006-01-02")})
+	if err != nil {
+		return nil, err
+	}
+	if len(downloads) == 0 {
+		return nil, nil
+	}
+	return &downloads[0], nil
+}
+
 // UpdateDownloadStatus updates the status, filepath, and error of a download.
 func (db *DB) UpdateDownloadStatus(id int64, status, filepath, errMsg string) error {
 	conn, err := db.pool.Take(context.Background())

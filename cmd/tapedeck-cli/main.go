@@ -264,6 +264,19 @@ func cmdDownloadShow(args []string) error {
 		showID = &show.ID
 	}
 
+	// Check for existing download of same show/date
+	existing, err := database.FindDownload(station.ID, archive.Date)
+	if err != nil {
+		return fmt.Errorf("check existing download: %w", err)
+	}
+	if existing != nil {
+		fmt.Printf("Download already exists: ID %d (%s)\n", existing.ID, existing.Status)
+		if existing.Status == db.StatusCompleted && existing.Filepath != "" {
+			fmt.Printf("  File: %s\n", existing.Filepath)
+		}
+		return nil
+	}
+
 	// Insert pending download record
 	downloadID, err := database.InsertDownload(&db.Download{
 		StationID:   station.ID,
@@ -276,17 +289,23 @@ func cmdDownloadShow(args []string) error {
 		return fmt.Errorf("create download record: %w", err)
 	}
 
-	fmt.Printf("Download queued: ID %d\n", downloadID)
+	fmt.Printf("Download started: ID %d\n", downloadID)
 	fmt.Printf("  %s - %s (%s)\n", callSign, archive.ShowName, archive.Date.Format("2006-01-02"))
-	fmt.Printf("Use 'tapedeck-cli download-status %d' to check progress\n", downloadID)
 
-	// Start download in background goroutine
-	go func() {
-		runDownload(downloadID, adapter, archive, outputDir)
-	}()
+	// Run download synchronously
+	runDownload(downloadID, adapter, archive, outputDir)
 
-	// Wait a moment to let background process start, then exit
-	time.Sleep(100 * time.Millisecond)
+	// Show final status
+	d, err := database.GetDownload(downloadID)
+	if err != nil {
+		return fmt.Errorf("get download status: %w", err)
+	}
+
+	if d.Status == db.StatusCompleted {
+		fmt.Printf("Download completed: %s\n", d.Filepath)
+	} else if d.Status == db.StatusFailed {
+		fmt.Printf("Download failed: %s\n", d.Error)
+	}
 
 	return nil
 }
