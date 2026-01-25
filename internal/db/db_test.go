@@ -13,6 +13,40 @@ func TestOpen_InMemory(t *testing.T) {
 	defer db.Close()
 }
 
+func TestListStations(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	// Initially empty
+	stations, err := db.ListStations()
+	if err != nil {
+		t.Fatalf("failed to list stations: %v", err)
+	}
+	if len(stations) != 0 {
+		t.Errorf("expected 0 stations, got %d", len(stations))
+	}
+
+	// Add some stations
+	db.GetOrCreateStation("WMBR", "MIT Radio", "https://wmbr.org")
+	db.GetOrCreateStation("WHRB", "Harvard Radio", "https://whrb.org")
+
+	stations, err = db.ListStations()
+	if err != nil {
+		t.Fatalf("failed to list stations: %v", err)
+	}
+	if len(stations) != 2 {
+		t.Errorf("expected 2 stations, got %d", len(stations))
+	}
+
+	// Should be sorted by call sign
+	if stations[0].CallSign != "WHRB" || stations[1].CallSign != "WMBR" {
+		t.Errorf("expected stations sorted by call sign, got %s, %s", stations[0].CallSign, stations[1].CallSign)
+	}
+}
+
 func TestGetOrCreateStation(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
@@ -511,5 +545,61 @@ func TestFindDownload(t *testing.T) {
 	}
 	if found.StationID != station.ID {
 		t.Errorf("expected station ID %d, got %d", station.ID, found.StationID)
+	}
+}
+
+func TestListDownloadsByShowID(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show1", "Show2"})
+	show1, _ := db.GetShowByName(station.ID, "Show1")
+	show2, _ := db.GetShowByName(station.ID, "Show2")
+
+	// Insert downloads for different shows
+	id1, _ := db.InsertDownload(&Download{StationID: station.ID, ShowID: &show1.ID, ArchiveDate: time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC), M3UURL: "http://1.m3u"})
+	_, _ = db.InsertDownload(&Download{StationID: station.ID, ShowID: &show1.ID, ArchiveDate: time.Date(2026, 1, 18, 0, 0, 0, 0, time.UTC), M3UURL: "http://2.m3u"}) // stays pending
+	db.InsertDownload(&Download{StationID: station.ID, ShowID: &show2.ID, ArchiveDate: time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC), M3UURL: "http://3.m3u"})
+
+	// Update one to completed
+	db.UpdateDownloadStatus(id1, StatusCompleted, "/path.mp3", "")
+
+	// List all downloads for show1
+	downloads, err := db.ListDownloadsByShowID(show1.ID, "")
+	if err != nil {
+		t.Fatalf("failed to list downloads: %v", err)
+	}
+	if len(downloads) != 2 {
+		t.Errorf("expected 2 downloads for show1, got %d", len(downloads))
+	}
+
+	// Should be sorted by archive_date descending
+	if downloads[0].ArchiveDate.Before(downloads[1].ArchiveDate) {
+		t.Error("expected downloads sorted by date descending")
+	}
+
+	// List only completed downloads for show1
+	completed, err := db.ListDownloadsByShowID(show1.ID, StatusCompleted)
+	if err != nil {
+		t.Fatalf("failed to list completed downloads: %v", err)
+	}
+	if len(completed) != 1 {
+		t.Errorf("expected 1 completed download, got %d", len(completed))
+	}
+	if completed[0].ID != id1 {
+		t.Errorf("expected download ID %d, got %d", id1, completed[0].ID)
+	}
+
+	// List downloads for show2
+	show2Downloads, err := db.ListDownloadsByShowID(show2.ID, "")
+	if err != nil {
+		t.Fatalf("failed to list downloads: %v", err)
+	}
+	if len(show2Downloads) != 1 {
+		t.Errorf("expected 1 download for show2, got %d", len(show2Downloads))
 	}
 }

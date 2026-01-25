@@ -150,6 +150,29 @@ func (db *DB) migrate() error {
 	return sqlitex.ExecuteScript(conn, schema, nil)
 }
 
+// ListStations returns all registered stations.
+func (db *DB) ListStations() ([]Station, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	var stations []Station
+	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url FROM stations ORDER BY call_sign`, &sqlitex.ExecOptions{
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			stations = append(stations, Station{
+				ID:         stmt.ColumnInt64(0),
+				CallSign:   stmt.ColumnText(1),
+				Name:       stmt.ColumnText(2),
+				ArchiveURL: stmt.ColumnText(3),
+			})
+			return nil
+		},
+	})
+	return stations, err
+}
+
 // GetOrCreateStation gets a station by call sign, creating it if it doesn't exist.
 func (db *DB) GetOrCreateStation(callSign, name, archiveURL string) (*Station, error) {
 	conn, err := db.pool.Take(context.Background())
@@ -428,10 +451,16 @@ func (db *DB) InsertDownload(d *Download) (int64, error) {
 		filepath = d.Filepath
 	}
 
+	// show_id is nullable
+	var showID any = nil
+	if d.ShowID != nil {
+		showID = *d.ShowID
+	}
+
 	err = sqlitex.Execute(conn, `INSERT INTO downloads (station_id, show_id, archive_date, m3u_url, filepath, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, &sqlitex.ExecOptions{
 		Args: []any{
 			d.StationID,
-			d.ShowID,
+			showID,
 			d.ArchiveDate.Format("2006-01-02"),
 			d.M3UURL,
 			filepath,
@@ -537,6 +566,42 @@ func (db *DB) ListDownloadsByStatus(statuses ...string) ([]Download, error) {
 		LEFT JOIN shows sh ON d.show_id = sh.id
 		WHERE d.status IN (%s)
 		ORDER BY d.created_at DESC`, placeholders)
+
+	return db.queryDownloads(conn, query, args)
+}
+
+// ListDownloadsByShowID returns downloads for a specific show, optionally filtered by status.
+func (db *DB) ListDownloadsByShowID(showID int64, status string) ([]Download, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	var query string
+	var args []any
+
+	if status == "" {
+		query = `
+			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+			       s.call_sign, COALESCE(sh.name, '')
+			FROM downloads d
+			JOIN stations s ON d.station_id = s.id
+			LEFT JOIN shows sh ON d.show_id = sh.id
+			WHERE d.show_id = ?
+			ORDER BY d.archive_date DESC`
+		args = []any{showID}
+	} else {
+		query = `
+			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+			       s.call_sign, COALESCE(sh.name, '')
+			FROM downloads d
+			JOIN stations s ON d.station_id = s.id
+			LEFT JOIN shows sh ON d.show_id = sh.id
+			WHERE d.show_id = ? AND d.status = ?
+			ORDER BY d.archive_date DESC`
+		args = []any{showID, status}
+	}
 
 	return db.queryDownloads(conn, query, args)
 }

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tapedeck</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>TAPEDECK</h1>
+    </header>
+
+    <main>
+        <div class="controls">
+            <div class="selector">
+                <label for="station-select">STATION</label>
+                <select id="station-select">
+                    <option value="">Select station...</option>
+                </select>
+            </div>
+
+            <div class="selector">
+                <label for="show-select">SHOW</label>
+                <select id="show-select" disabled>
+                    <option value="">Select show...</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="tape-deck">
+            <div class="tape-window">
+                <div class="reel left-reel">
+                    <div class="reel-center"></div>
+                </div>
+                <div class="tape-label">
+                    <span id="now-playing">No tape loaded</span>
+                </div>
+                <div class="reel right-reel">
+                    <div class="reel-center"></div>
+                </div>
+            </div>
+
+            <div class="transport-controls">
+                <button id="btn-prev" title="Previous">
+                    <span class="icon">|&lt;&lt;</span>
+                </button>
+                <button id="btn-play" title="Play/Pause">
+                    <span class="icon play-icon">&#9654;</span>
+                </button>
+                <button id="btn-stop" title="Stop">
+                    <span class="icon">&#9632;</span>
+                </button>
+                <button id="btn-next" title="Next">
+                    <span class="icon">&gt;&gt;|</span>
+                </button>
+            </div>
+
+            <div class="progress-container">
+                <span id="time-current">0:00</span>
+                <input type="range" id="progress-bar" min="0" max="100" value="0">
+                <span id="time-total">0:00</span>
+            </div>
+        </div>
+
+        <div class="tape-collection">
+            <h2>COLLECTION</h2>
+            <div id="tape-list" class="tape-list">
+                <p class="empty-message">Select a station and show to view downloads</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>TAPEDECK.US</p>
+    </footer>
+
+    <audio id="audio-player"></audio>
+    <script src="app.js"></script>
+</body>
+</html>
