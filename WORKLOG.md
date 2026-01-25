@@ -16,5 +16,15 @@ DONE: Implement backend CLI for WMBR
     - list-downloads [STATION]
     - download-show <STATION> <SHOW> [--latest|--date] - blocking, with duplicate detection
     - download-status [ID] - show progress/status
-TODO: Implement backend CLI for remaining stations (WHRB, WUMB, WOMR, WCUW)
+    - schedule-download <STATION> <SHOW> - generate crontab line for automated downloads
+      - Analyzes archive history to infer broadcast schedule
+      - Outputs cron line with 2.5hr delay for archive availability
+      - Handles late-night rollover (e.g., 23:00 -> 01:30 next day)
+      - Confidence levels based on schedule consistency
+DONE: Implement schedule-download CLI command
+TODO: Implement cron scheduler to download specific show archives each week
+TODO: Implement backend CLI for WHRB
+TODO: Implement backend CLI for WUMB
+TODO: Implement backend CLI for WOMR
+TODO: Implement backend CLI for WCUW
 TODO: Build frontend GUI

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -242,4 +243,148 @@ func sanitizeFilename(name string) string {
 	// Remove characters that are problematic in filenames
 	re := regexp.MustCompile(`[<>:"/\\|?*]`)
 	return re.ReplaceAllString(name, "")
+}
+
+// GetShowSchedule analyzes archive history to infer the broadcast schedule.
+func (a *Adapter) GetShowSchedule(show string) (*tapedeck.Schedule, error) {
+	archives, err := a.ListArchives(show)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(archives) < 2 {
+		return nil, fmt.Errorf("insufficient data: need at least 2 archives, found %d", len(archives))
+	}
+
+	return analyzeSchedule(show, archives)
+}
+
+// analyzeSchedule extracts schedule patterns from a list of archives.
+func analyzeSchedule(show string, archives []tapedeck.Archive) (*tapedeck.Schedule, error) {
+	// Extract start times from M3U URLs and analyze patterns
+	// Pattern: _YYYYMMDD_HHMM.m3u
+	timePattern := regexp.MustCompile(`_(\d{8})_(\d{4})\.m3u$`)
+
+	type broadcastInfo struct {
+		dayOfWeek time.Weekday
+		startTime string // "HH:MM"
+	}
+
+	var broadcasts []broadcastInfo
+
+	for _, arch := range archives {
+		matches := timePattern.FindStringSubmatch(arch.M3UURL)
+		if matches == nil {
+			continue
+		}
+
+		dateStr := matches[1]
+		timeStr := matches[2]
+
+		date, err := time.Parse("20060102", dateStr)
+		if err != nil {
+			continue
+		}
+
+		startTime := fmt.Sprintf("%s:%s", timeStr[:2], timeStr[2:])
+		broadcasts = append(broadcasts, broadcastInfo{
+			dayOfWeek: date.Weekday(),
+			startTime: startTime,
+		})
+	}
+
+	if len(broadcasts) < 2 {
+		return nil, fmt.Errorf("insufficient data: could not parse schedule from archives")
+	}
+
+	// Count occurrences of each day/time combination
+	type dayTime struct {
+		day  time.Weekday
+		time string
+	}
+	counts := make(map[dayTime]int)
+	for _, b := range broadcasts {
+		dt := dayTime{day: b.dayOfWeek, time: b.startTime}
+		counts[dt]++
+	}
+
+	// Find the most common day/time
+	var dominantDT dayTime
+	maxCount := 0
+	for dt, count := range counts {
+		if count > maxCount {
+			maxCount = count
+			dominantDT = dt
+		}
+	}
+
+	// Check for multiple airings per week
+	daysUsed := make(map[time.Weekday]bool)
+	for _, b := range broadcasts {
+		daysUsed[b.dayOfWeek] = true
+	}
+	multiplePerWeek := len(daysUsed) > 1
+
+	// Determine confidence
+	confidence := "high"
+	consistencyRatio := float64(maxCount) / float64(len(broadcasts))
+	if consistencyRatio < 0.5 {
+		confidence = "low"
+	} else if consistencyRatio < 0.8 || multiplePerWeek {
+		confidence = "medium"
+	}
+
+	// Calculate recommended download time
+	// Archive delay is ~2 hours, add 30 min buffer = 2.5 hours after broadcast start
+	downloadTime := calculateDownloadTime(dominantDT.time, dominantDT.day)
+
+	// Build notes
+	var notes string
+	if multiplePerWeek {
+		days := make([]string, 0, len(daysUsed))
+		for d := range daysUsed {
+			days = append(days, d.String())
+		}
+		sort.Strings(days)
+		notes = fmt.Sprintf("Show airs on multiple days: %s", strings.Join(days, ", "))
+	}
+
+	return &tapedeck.Schedule{
+		ShowName:        show,
+		DayOfWeek:       dominantDT.day,
+		StartTime:       dominantDT.time,
+		RecommendedCron: downloadTime,
+		Confidence:      confidence,
+		MultiplePerWeek: multiplePerWeek,
+		Notes:           notes,
+	}, nil
+}
+
+// calculateDownloadTime adds 2.5 hours to the broadcast start time and returns cron format.
+// Handles late-night rollover to next day.
+func calculateDownloadTime(startTime string, day time.Weekday) string {
+	// Parse start time
+	parts := strings.Split(startTime, ":")
+	if len(parts) != 2 {
+		return "30 23 * * " + fmt.Sprintf("%d", day) // fallback
+	}
+
+	hour, _ := strconv.Atoi(parts[0])
+	minute, _ := strconv.Atoi(parts[1])
+
+	// Add 2.5 hours (2 hours archive delay + 30 min buffer)
+	minute += 30
+	hour += 2
+	if minute >= 60 {
+		minute -= 60
+		hour++
+	}
+
+	downloadDay := day
+	if hour >= 24 {
+		hour -= 24
+		downloadDay = (day + 1) % 7
+	}
+
+	return fmt.Sprintf("%d %d * * %d", minute, hour, downloadDay)
 }

@@ -40,6 +40,8 @@ func main() {
 		err = cmdDownloadShow(args)
 	case "download-status":
 		err = cmdDownloadStatus(args)
+	case "schedule-download":
+		err = cmdScheduleDownload(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -65,6 +67,7 @@ Commands:
   list-downloads [STATION]                     List downloaded files from database
   download-show <STATION> <SHOW> [options]     Queue archive download (returns ID)
   download-status [ID]                         Show download status (all pending if no ID)
+  schedule-download <STATION> <SHOW>           Generate crontab line for automated downloads
 
 Options for download-show:
   --latest            Download the most recent archive (default)
@@ -79,7 +82,8 @@ Examples:
   tapedeck-cli download-show WMBR "Lost and Found" --latest
   tapedeck-cli download-status 42
   tapedeck-cli download-status
-  tapedeck-cli list-downloads WMBR`)
+  tapedeck-cli list-downloads WMBR
+  tapedeck-cli schedule-download WMBR Backwoods`)
 }
 
 func cmdListShows(args []string) error {
@@ -413,4 +417,41 @@ func openDB() (*db.DB, error) {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
 	return db.Open(dbPath)
+}
+
+func cmdScheduleDownload(args []string) error {
+	if len(args) < 2 {
+		return fmt.Errorf("usage: schedule-download <STATION> <SHOW>")
+	}
+
+	callSign := strings.ToUpper(args[0])
+	showName := args[1]
+
+	adapter, err := tapedeck.GetAdapter(callSign)
+	if err != nil {
+		return err
+	}
+
+	schedule, err := adapter.GetShowSchedule(showName)
+	if err != nil {
+		return fmt.Errorf("get schedule: %w", err)
+	}
+
+	// Format the show name for the crontab command
+	quotedShow := showName
+	if strings.Contains(showName, " ") {
+		quotedShow = fmt.Sprintf("%q", showName)
+	}
+
+	// Output the crontab line with comments
+	fmt.Printf("# %s on %s\n", showName, callSign)
+	fmt.Printf("# Airs: %s at %s\n", schedule.DayOfWeek, schedule.StartTime)
+	fmt.Printf("# Confidence: %s\n", schedule.Confidence)
+	if schedule.Notes != "" {
+		fmt.Printf("# Note: %s\n", schedule.Notes)
+	}
+	fmt.Printf("%s docker exec tapedeck tapedeck-cli download-show %s %s --latest\n",
+		schedule.RecommendedCron, callSign, quotedShow)
+
+	return nil
 }
