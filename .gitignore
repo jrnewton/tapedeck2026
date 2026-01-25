@@ -1,0 +1,6 @@
+# Runtime data
+data/
+
+# Binaries
+tapedeck
+tapedeck-cli
