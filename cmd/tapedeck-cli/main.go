@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ func main() {
 		err = cmdListDownloads(args)
 	case "download-show":
 		err = cmdDownloadShow(args)
+	case "download-status":
+		err = cmdDownloadStatus(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -60,7 +63,8 @@ Usage:
 Commands:
   list-shows <STATION>                         List available shows from station archive
   list-downloads [STATION]                     List downloaded files from database
-  download-show <STATION> <SHOW> [options]     Download archive and record in DB
+  download-show <STATION> <SHOW> [options]     Queue archive download (returns ID)
+  download-status [ID]                         Show download status (all pending if no ID)
 
 Options for download-show:
   --latest            Download the most recent archive (default)
@@ -73,8 +77,8 @@ Supported Stations:
 Examples:
   tapedeck-cli list-shows WMBR
   tapedeck-cli download-show WMBR "Lost and Found" --latest
-  tapedeck-cli download-show WMBR Backwoods --date 20260120
-  tapedeck-cli list-downloads
+  tapedeck-cli download-status 42
+  tapedeck-cli download-status
   tapedeck-cli list-downloads WMBR`)
 }
 
@@ -163,7 +167,12 @@ func cmdListDownloads(args []string) error {
 
 	fmt.Printf("Downloads (%d):\n", len(downloads))
 	for _, d := range downloads {
-		fmt.Printf("  [%s] %s - %s (%s)\n", d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"), d.Filepath)
+		statusStr := formatStatus(d.Status)
+		if d.Filepath != "" {
+			fmt.Printf("  [%d] %s - %s (%s) - %s - %s\n", d.ID, d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"), statusStr, d.Filepath)
+		} else {
+			fmt.Printf("  [%d] %s - %s (%s) - %s\n", d.ID, d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"), statusStr)
+		}
 	}
 
 	return nil
@@ -235,49 +244,148 @@ func cmdDownloadShow(args []string) error {
 		}
 	}
 
-	fmt.Printf("Downloading %s - %s (%s)...\n", callSign, archive.ShowName, archive.Date.Format("2006-01-02"))
-
-	destPath, err := adapter.DownloadArchive(archive, outputDir)
-	if err != nil {
-		return fmt.Errorf("download: %w", err)
-	}
-
-	fmt.Printf("Downloaded to: %s\n", destPath)
-
-	// Record in database
+	// Open database and create download record
 	database, err := openDB()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not record download in database: %v\n", err)
-		return nil
+		return err
 	}
 	defer database.Close()
 
 	// Get or create station
 	station, err := database.GetOrCreateStation(callSign, "", "")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not get station: %v\n", err)
-		return nil
+		return err
 	}
 
-	// Try to get show ID (may not exist if cache was cleared)
+	// Try to get show ID
 	var showID *int64
 	show, err := database.GetShowByName(station.ID, archive.ShowName)
 	if err == nil && show != nil {
 		showID = &show.ID
 	}
 
-	_, err = database.InsertDownload(&db.Download{
+	// Insert pending download record
+	downloadID, err := database.InsertDownload(&db.Download{
 		StationID:   station.ID,
 		ShowID:      showID,
 		ArchiveDate: archive.Date,
-		Filepath:    destPath,
-		Status:      "completed",
+		M3UURL:      archive.M3UURL,
+		Status:      db.StatusPending,
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not record download in database: %v\n", err)
+		return fmt.Errorf("create download record: %w", err)
+	}
+
+	fmt.Printf("Download queued: ID %d\n", downloadID)
+	fmt.Printf("  %s - %s (%s)\n", callSign, archive.ShowName, archive.Date.Format("2006-01-02"))
+	fmt.Printf("Use 'tapedeck-cli download-status %d' to check progress\n", downloadID)
+
+	// Start download in background goroutine
+	go func() {
+		runDownload(downloadID, adapter, archive, outputDir)
+	}()
+
+	// Wait a moment to let background process start, then exit
+	time.Sleep(100 * time.Millisecond)
+
+	return nil
+}
+
+func runDownload(downloadID int64, adapter tapedeck.Adapter, archive *tapedeck.Archive, outputDir string) {
+	database, err := openDB()
+	if err != nil {
+		return
+	}
+	defer database.Close()
+
+	// Update status to downloading
+	database.UpdateDownloadStatus(downloadID, db.StatusDownloading, "", "")
+
+	// Perform the download
+	destPath, err := adapter.DownloadArchive(archive, outputDir)
+	if err != nil {
+		database.UpdateDownloadStatus(downloadID, db.StatusFailed, "", err.Error())
+		return
+	}
+
+	// Update status to completed
+	database.UpdateDownloadStatus(downloadID, db.StatusCompleted, destPath, "")
+}
+
+func cmdDownloadStatus(args []string) error {
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	// If ID provided, show specific download
+	if len(args) > 0 {
+		id, err := strconv.ParseInt(args[0], 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid download ID: %s", args[0])
+		}
+
+		d, err := database.GetDownload(id)
+		if err != nil {
+			return err
+		}
+
+		printDownloadDetail(d)
+		return nil
+	}
+
+	// Show all pending/downloading
+	downloads, err := database.ListDownloadsByStatus(db.StatusPending, db.StatusDownloading)
+	if err != nil {
+		return err
+	}
+
+	if len(downloads) == 0 {
+		fmt.Println("No pending or in-progress downloads")
+		return nil
+	}
+
+	fmt.Printf("Pending/In-Progress Downloads (%d):\n", len(downloads))
+	for _, d := range downloads {
+		fmt.Printf("  [%d] %s - %s (%s) - %s\n",
+			d.ID, d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"), formatStatus(d.Status))
 	}
 
 	return nil
+}
+
+func printDownloadDetail(d *db.Download) {
+	fmt.Printf("[%d] %s - %s (%s)\n", d.ID, d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"))
+	fmt.Printf("  Status:  %s\n", formatStatus(d.Status))
+	fmt.Printf("  Started: %s\n", d.CreatedAt.Format("2006-01-02 15:04:05"))
+
+	if !d.UpdatedAt.IsZero() {
+		fmt.Printf("  Updated: %s\n", d.UpdatedAt.Format("2006-01-02 15:04:05"))
+	}
+
+	if d.Filepath != "" {
+		fmt.Printf("  File:    %s\n", d.Filepath)
+	}
+
+	if d.Error != "" {
+		fmt.Printf("  Error:   %s\n", d.Error)
+	}
+}
+
+func formatStatus(status string) string {
+	switch status {
+	case db.StatusPending:
+		return "pending"
+	case db.StatusDownloading:
+		return "downloading"
+	case db.StatusCompleted:
+		return "completed"
+	case db.StatusFailed:
+		return "failed"
+	default:
+		return status
+	}
 }
 
 func openDB() (*db.DB, error) {

@@ -257,8 +257,8 @@ func TestInsertDownload(t *testing.T) {
 		StationID:   station.ID,
 		ShowID:      &show.ID,
 		ArchiveDate: time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC),
-		Filepath:    "/data/downloads/WMBR_Lost_and_Found_20260125.mp3",
-		Status:      "completed",
+		M3UURL:      "https://wmbr.org/m3u/test.m3u",
+		Status:      StatusPending,
 	}
 
 	id, err := db.InsertDownload(d)
@@ -268,6 +268,15 @@ func TestInsertDownload(t *testing.T) {
 
 	if id <= 0 {
 		t.Errorf("expected positive ID, got %d", id)
+	}
+
+	// Verify status defaults to pending
+	got, err := db.GetDownload(id)
+	if err != nil {
+		t.Fatalf("failed to get download: %v", err)
+	}
+	if got.Status != StatusPending {
+		t.Errorf("expected status %q, got %q", StatusPending, got.Status)
 	}
 }
 
@@ -289,9 +298,9 @@ func TestListDownloads(t *testing.T) {
 	show2, _ := db.GetShowByName(whrb.ID, "Show2")
 
 	// Insert downloads
-	db.InsertDownload(&Download{StationID: wmbr.ID, ShowID: &show1.ID, ArchiveDate: time.Now(), Filepath: "/path1.mp3"})
-	db.InsertDownload(&Download{StationID: whrb.ID, ShowID: &show2.ID, ArchiveDate: time.Now(), Filepath: "/path2.mp3"})
-	db.InsertDownload(&Download{StationID: wmbr.ID, ShowID: &show1.ID, ArchiveDate: time.Now(), Filepath: "/path3.mp3"})
+	db.InsertDownload(&Download{StationID: wmbr.ID, ShowID: &show1.ID, ArchiveDate: time.Now(), M3UURL: "http://test/1.m3u"})
+	db.InsertDownload(&Download{StationID: whrb.ID, ShowID: &show2.ID, ArchiveDate: time.Now(), M3UURL: "http://test/2.m3u"})
+	db.InsertDownload(&Download{StationID: wmbr.ID, ShowID: &show1.ID, ArchiveDate: time.Now(), M3UURL: "http://test/3.m3u"})
 
 	// List all
 	all, err := db.ListDownloads("")
@@ -315,5 +324,149 @@ func TestListDownloads(t *testing.T) {
 		if d.Station != "WMBR" {
 			t.Errorf("expected station WMBR, got %s", d.Station)
 		}
+	}
+}
+
+func TestUpdateDownloadStatus(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show1"})
+	show, _ := db.GetShowByName(station.ID, "Show1")
+
+	// Insert pending download
+	id, err := db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      &show.ID,
+		ArchiveDate: time.Now(),
+		M3UURL:      "http://test.m3u",
+	})
+	if err != nil {
+		t.Fatalf("failed to insert download: %v", err)
+	}
+
+	// Update to downloading
+	err = db.UpdateDownloadStatus(id, StatusDownloading, "", "")
+	if err != nil {
+		t.Fatalf("failed to update status: %v", err)
+	}
+
+	d, _ := db.GetDownload(id)
+	if d.Status != StatusDownloading {
+		t.Errorf("expected status %q, got %q", StatusDownloading, d.Status)
+	}
+
+	// Update to completed with filepath
+	err = db.UpdateDownloadStatus(id, StatusCompleted, "/path/to/file.mp3", "")
+	if err != nil {
+		t.Fatalf("failed to update status: %v", err)
+	}
+
+	d, _ = db.GetDownload(id)
+	if d.Status != StatusCompleted {
+		t.Errorf("expected status %q, got %q", StatusCompleted, d.Status)
+	}
+	if d.Filepath != "/path/to/file.mp3" {
+		t.Errorf("expected filepath %q, got %q", "/path/to/file.mp3", d.Filepath)
+	}
+}
+
+func TestUpdateDownloadStatus_Failed(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show1"})
+	show, _ := db.GetShowByName(station.ID, "Show1")
+
+	id, _ := db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      &show.ID,
+		ArchiveDate: time.Now(),
+		M3UURL:      "http://test.m3u",
+	})
+
+	// Update to failed with error
+	err = db.UpdateDownloadStatus(id, StatusFailed, "", "connection timeout")
+	if err != nil {
+		t.Fatalf("failed to update status: %v", err)
+	}
+
+	d, _ := db.GetDownload(id)
+	if d.Status != StatusFailed {
+		t.Errorf("expected status %q, got %q", StatusFailed, d.Status)
+	}
+	if d.Error != "connection timeout" {
+		t.Errorf("expected error %q, got %q", "connection timeout", d.Error)
+	}
+}
+
+func TestListDownloadsByStatus(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show1"})
+	show, _ := db.GetShowByName(station.ID, "Show1")
+
+	// Insert downloads with different statuses
+	id1, _ := db.InsertDownload(&Download{StationID: station.ID, ShowID: &show.ID, ArchiveDate: time.Now(), M3UURL: "http://1.m3u"})
+	id2, _ := db.InsertDownload(&Download{StationID: station.ID, ShowID: &show.ID, ArchiveDate: time.Now(), M3UURL: "http://2.m3u"})
+	id3, _ := db.InsertDownload(&Download{StationID: station.ID, ShowID: &show.ID, ArchiveDate: time.Now(), M3UURL: "http://3.m3u"})
+
+	db.UpdateDownloadStatus(id1, StatusDownloading, "", "")
+	db.UpdateDownloadStatus(id2, StatusCompleted, "/path.mp3", "")
+	// id3 stays pending
+
+	// List pending and downloading
+	active, err := db.ListDownloadsByStatus(StatusPending, StatusDownloading)
+	if err != nil {
+		t.Fatalf("failed to list by status: %v", err)
+	}
+
+	if len(active) != 2 {
+		t.Errorf("expected 2 active downloads, got %d", len(active))
+	}
+
+	// Verify id2 (completed) is not in the list
+	for _, d := range active {
+		if d.ID == id2 {
+			t.Error("completed download should not be in active list")
+		}
+	}
+
+	// Verify id3 (pending) is in the list
+	found := false
+	for _, d := range active {
+		if d.ID == id3 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("pending download should be in active list")
+	}
+}
+
+func TestGetDownload_NotFound(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.GetDownload(999)
+	if err == nil {
+		t.Error("expected error for non-existent download")
 	}
 }

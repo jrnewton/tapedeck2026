@@ -37,15 +37,26 @@ type Archive struct {
 	CachedAt time.Time
 }
 
+// Download status constants.
+const (
+	StatusPending     = "pending"
+	StatusDownloading = "downloading"
+	StatusCompleted   = "completed"
+	StatusFailed      = "failed"
+)
+
 // Download represents a downloaded archive record.
 type Download struct {
 	ID          int64
 	StationID   int64
 	ShowID      *int64 // nullable
 	ArchiveDate time.Time
-	Filepath    string
+	M3UURL      string
+	Filepath    string // empty until download completes
 	Status      string
+	Error       string // error message if failed
 	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	// Denormalized fields for display
 	Station string
 	Show    string
@@ -123,14 +134,18 @@ func (db *DB) migrate() error {
 			station_id INTEGER NOT NULL REFERENCES stations(id),
 			show_id INTEGER REFERENCES shows(id),
 			archive_date TEXT NOT NULL,
-			filepath TEXT NOT NULL,
-			status TEXT NOT NULL DEFAULT 'completed',
-			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+			m3u_url TEXT NOT NULL,
+			filepath TEXT,
+			status TEXT NOT NULL DEFAULT 'pending',
+			error TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_shows_station ON shows(station_id);
 		CREATE INDEX IF NOT EXISTS idx_archives_show ON archives(show_id);
 		CREATE INDEX IF NOT EXISTS idx_downloads_station ON downloads(station_id);
+		CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
 	`
 	return sqlitex.ExecuteScript(conn, schema, nil)
 }
@@ -400,19 +415,26 @@ func (db *DB) InsertDownload(d *Download) (int64, error) {
 
 	status := d.Status
 	if status == "" {
-		status = "completed"
+		status = StatusPending
 	}
 	createdAt := d.CreatedAt
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
 
-	err = sqlitex.Execute(conn, `INSERT INTO downloads (station_id, show_id, archive_date, filepath, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`, &sqlitex.ExecOptions{
+	// filepath can be empty string (NULL in DB)
+	var filepath any = nil
+	if d.Filepath != "" {
+		filepath = d.Filepath
+	}
+
+	err = sqlitex.Execute(conn, `INSERT INTO downloads (station_id, show_id, archive_date, m3u_url, filepath, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, &sqlitex.ExecOptions{
 		Args: []any{
 			d.StationID,
 			d.ShowID,
 			d.ArchiveDate.Format("2006-01-02"),
-			d.Filepath,
+			d.M3UURL,
+			filepath,
 			status,
 			createdAt.Format(time.RFC3339),
 		},
@@ -437,7 +459,7 @@ func (db *DB) ListDownloads(callSign string) ([]Download, error) {
 
 	if callSign == "" {
 		query = `
-			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.filepath, d.status, d.created_at,
+			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
 			       s.call_sign, COALESCE(sh.name, '')
 			FROM downloads d
 			JOIN stations s ON d.station_id = s.id
@@ -445,7 +467,7 @@ func (db *DB) ListDownloads(callSign string) ([]Download, error) {
 			ORDER BY d.created_at DESC`
 	} else {
 		query = `
-			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.filepath, d.status, d.created_at,
+			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
 			       s.call_sign, COALESCE(sh.name, '')
 			FROM downloads d
 			JOIN stations s ON d.station_id = s.id
@@ -455,17 +477,110 @@ func (db *DB) ListDownloads(callSign string) ([]Download, error) {
 		args = []any{callSign}
 	}
 
+	return db.queryDownloads(conn, query, args)
+}
+
+// GetDownload returns a download by ID.
+func (db *DB) GetDownload(id int64) (*Download, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+		       s.call_sign, COALESCE(sh.name, '')
+		FROM downloads d
+		JOIN stations s ON d.station_id = s.id
+		LEFT JOIN shows sh ON d.show_id = sh.id
+		WHERE d.id = ?`
+
+	downloads, err := db.queryDownloads(conn, query, []any{id})
+	if err != nil {
+		return nil, err
+	}
+	if len(downloads) == 0 {
+		return nil, fmt.Errorf("download not found: %d", id)
+	}
+	return &downloads[0], nil
+}
+
+// ListDownloadsByStatus returns downloads filtered by status values.
+func (db *DB) ListDownloadsByStatus(statuses ...string) ([]Download, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	if len(statuses) == 0 {
+		return nil, nil
+	}
+
+	// Build placeholders
+	placeholders := ""
+	args := make([]any, len(statuses))
+	for i, s := range statuses {
+		if i > 0 {
+			placeholders += ", "
+		}
+		placeholders += "?"
+		args[i] = s
+	}
+
+	query := fmt.Sprintf(`
+		SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+		       s.call_sign, COALESCE(sh.name, '')
+		FROM downloads d
+		JOIN stations s ON d.station_id = s.id
+		LEFT JOIN shows sh ON d.show_id = sh.id
+		WHERE d.status IN (%s)
+		ORDER BY d.created_at DESC`, placeholders)
+
+	return db.queryDownloads(conn, query, args)
+}
+
+// UpdateDownloadStatus updates the status, filepath, and error of a download.
+func (db *DB) UpdateDownloadStatus(id int64, status, filepath, errMsg string) error {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return err
+	}
+	defer db.pool.Put(conn)
+
+	now := time.Now().Format(time.RFC3339)
+
+	var fp any = nil
+	if filepath != "" {
+		fp = filepath
+	}
+
+	var errVal any = nil
+	if errMsg != "" {
+		errVal = errMsg
+	}
+
+	return sqlitex.Execute(conn, `UPDATE downloads SET status = ?, filepath = ?, error = ?, updated_at = ? WHERE id = ?`, &sqlitex.ExecOptions{
+		Args: []any{status, fp, errVal, now, id},
+	})
+}
+
+// queryDownloads executes a download query and returns results.
+func (db *DB) queryDownloads(conn *sqlite.Conn, query string, args []any) ([]Download, error) {
 	var downloads []Download
-	err = sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
+	err := sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
 		Args: args,
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			d := Download{
 				ID:        stmt.ColumnInt64(0),
 				StationID: stmt.ColumnInt64(1),
-				Filepath:  stmt.ColumnText(4),
-				Status:    stmt.ColumnText(5),
-				Station:   stmt.ColumnText(7),
-				Show:      stmt.ColumnText(8),
+				M3UURL:    stmt.ColumnText(4),
+				Filepath:  stmt.ColumnText(5),
+				Status:    stmt.ColumnText(6),
+				Error:     stmt.ColumnText(7),
+				Station:   stmt.ColumnText(10),
+				Show:      stmt.ColumnText(11),
 			}
 
 			if stmt.ColumnType(2) != sqlite.TypeNull {
@@ -476,8 +591,11 @@ func (db *DB) ListDownloads(callSign string) ([]Download, error) {
 			if date, err := time.Parse("2006-01-02", stmt.ColumnText(3)); err == nil {
 				d.ArchiveDate = date
 			}
-			if t, err := time.Parse(time.RFC3339, stmt.ColumnText(6)); err == nil {
+			if t, err := time.Parse(time.RFC3339, stmt.ColumnText(8)); err == nil {
 				d.CreatedAt = t
+			}
+			if t, err := time.Parse(time.RFC3339, stmt.ColumnText(9)); err == nil {
+				d.UpdatedAt = t
 			}
 
 			downloads = append(downloads, d)
