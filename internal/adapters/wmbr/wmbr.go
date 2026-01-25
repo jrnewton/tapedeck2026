@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -202,6 +203,10 @@ func parseArchivePage(r io.Reader) ([]tapedeck.Archive, error) {
 				if attr.Key == "href" {
 					if matches := m3uPattern.FindStringSubmatch(attr.Val); matches != nil {
 						showName := strings.ReplaceAll(matches[1], "_", " ")
+						// Decode URL-encoded characters (e.g., %28 -> (, %26 -> &)
+						if decoded, err := url.QueryUnescape(showName); err == nil {
+							showName = decoded
+						}
 						dateStr := matches[2]
 
 						date, err := time.Parse("20060102", dateStr)
