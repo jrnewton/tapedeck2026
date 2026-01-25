@@ -24,8 +24,10 @@ DONE: Implement cron scheduler to download specific show archives each week
       - Handles late-night rollover (e.g., 23:00 -> 01:30 next day)
       - Confidence levels based on schedule consistency
       - Includes ready-to-run crontab install command
+TODO: Build frontend GUI that allow for download playback in browser
+    - You select a station and a show (which has downloads) and then
+      get a UI which plays the saved audio file on disk.
 TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB
 TODO: Implement backend CLI for WOMR
 TODO: Implement backend CLI for WCUW
-TODO: Build frontend GUI
