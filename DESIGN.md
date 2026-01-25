@@ -22,35 +22,40 @@ A web application for downloading radio show archives (mp3 files) from station a
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                       Docker Host                            │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                  Docker Container                      │  │
-│  │                                                        │  │
-│  │  ┌──────────────────────────────────────────────────┐ │  │
-│  │  │              REST API (HTTP Server)              │ │  │
-│  │  │         Serves web frontend + JSON API           │ │  │
-│  │  └──────────────────────┬───────────────────────────┘ │  │
-│  │                         │                              │  │
-│  │  ┌──────────────────────▼───────────────────────────┐ │  │
-│  │  │           Core Library (tapedeck pkg)            │ │  │
-│  │  │      Headless, testable, cron-compatible         │ │  │
-│  │  │  ┌─────────────┐  ┌────────────┐  ┌──────────┐  │ │  │
-│  │  │  │  Scheduler  │  │  Recorder  │  │ Adapters │  │ │  │
-│  │  │  └─────────────┘  └────────────┘  └──────────┘  │ │  │
-│  │  │                         │                        │ │  │
-│  │  │                  ┌──────▼──────┐                 │ │  │
-│  │  │                  │   SQLite    │                 │ │  │
-│  │  │                  └─────────────┘                 │ │  │
-│  │  └──────────────────────────────────────────────────┘ │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                              │                               │
-│                    ┌─────────▼─────────┐                     │
-│                    │  Volume: /data    │                     │
-│                    │  - tapedeck.db    │                     │
-│                    │  - downloads/     │                     │
-│                    └───────────────────┘                     │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                           Docker Host                             │
+│                                                                   │
+│  ┌────────────┐                                                   │
+│  │ Host Cron  │───── docker exec ─────┐                           │
+│  └────────────┘                       │                           │
+│                                       ▼                           │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │           Docker Container (restart: unless-stopped)        │  │
+│  │                                                             │  │
+│  │  ┌───────────────────────────────────────────────────────┐  │  │
+│  │  │              REST API (HTTP Server)                   │  │  │
+│  │  │         Serves web frontend + JSON API                │  │  │
+│  │  └────────────────────────┬──────────────────────────────┘  │  │
+│  │                           │                                 │  │
+│  │  ┌────────────────────────▼──────────────────────────────┐  │  │
+│  │  │            Core Library (tapedeck pkg)                │  │  │
+│  │  │           Headless, testable, CLI-compatible          │  │  │
+│  │  │       ┌──────────────┐       ┌──────────────┐         │  │  │
+│  │  │       │  Downloader  │       │   Adapters   │         │  │  │
+│  │  │       └──────────────┘       └──────────────┘         │  │  │
+│  │  │                    │                                  │  │  │
+│  │  │             ┌──────▼──────┐                           │  │  │
+│  │  │             │   SQLite    │                           │  │  │
+│  │  │             └─────────────┘                           │  │  │
+│  │  └───────────────────────────────────────────────────────┘  │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                               │                                   │
+│                     ┌─────────▼─────────┐                         │
+│                     │  Volume: /data    │                         │
+│                     │  - tapedeck.db    │                         │
+│                     │  - downloads/     │                         │
+│                     └───────────────────┘                         │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ## Components
@@ -59,21 +64,15 @@ A web application for downloading radio show archives (mp3 files) from station a
 
 The core library is fully headless and testable. It can be used:
 - Programmatically from Go code
-- Via CLI for cron-scheduled recordings
+- Via CLI (invoked by host cron for scheduled downloads)
 - Via REST API for web frontend
 
-1. **Scheduler**
-   - Manages download schedules
-   - Manages live record capture schedules (when no archives exist)
-   - Triggers downloads and recordings at specified times
-   - Cron-compatible for automated capture
-
-2. **Recorder**
-   - Downloads/captures streams
-   - Job queue for managing active recordings
+1. **Downloader**
+   - Downloads archive streams
+   - Job queue for managing active downloads
    - Progress tracking
 
-3. **Station Adapters**
+2. **Station Adapters**
    - Pluggable adapters (one per radio station archive source)
    - Each adapter handles: listing available shows, downloading archives
 
@@ -88,14 +87,13 @@ Thin layer over the core library:
 
 Tables:
 - `stations` - radio stations (call sign, name, adapter type)
-- `shows` - shows per station (name, schedule info)
+- `shows` - shows per station (name, metadata)
 - `downloads` - download history and status
-- `jobs` - pending/active download queue
 
 ### Frontend (HTML/CSS/Vanilla JS)
 
 - Single page application
-- Views: Dashboard, Downloads, Settings
+- Views: Stations/Shows browser, Downloads history
 - No build step required
 
 ## REST API Endpoints
@@ -108,28 +106,33 @@ POST /api/downloads             - Queue a download
 GET  /api/downloads             - List download history
 GET  /api/downloads/:id         - Get download status
 DELETE /api/downloads/:id       - Cancel/remove download
-
-GET  /api/schedules             - List scheduled downloads
-POST /api/schedules             - Create a schedule
-DELETE /api/schedules/:id       - Remove a schedule
 ```
 
 ## CLI Usage
 
-The CLI provides headless access to the core library for cron jobs:
+The CLI provides headless access to the core library. It runs inside the Docker container and is invoked via `docker exec`:
 
 ```bash
 # List available shows for a station
-tapedeck-cli list WMBR
+docker exec tapedeck tapedeck-cli list WMBR
 
 # Download latest archive of a show
-tapedeck-cli download WMBR backwoods --latest
+docker exec tapedeck tapedeck-cli download WMBR backwoods --latest
 
 # Download archive from a specific date
-tapedeck-cli download WMBR backwoods --date 20260112
+docker exec tapedeck tapedeck-cli download WMBR backwoods --date 20260112
+```
 
-# Example cron entry (download latest every Monday at 6am)
-0 6 * * 1 tapedeck-cli download WMBR backwoods --latest
+## Scheduling with Host Cron
+
+Scheduled downloads are managed via the host system's cron. The container runs with `restart: unless-stopped` to ensure availability.
+
+```bash
+# Example: download latest every Monday at 6am
+0 6 * * 1 docker exec tapedeck tapedeck-cli download WMBR backwoods --latest
+
+# Example: download specific show every Sunday at noon
+0 12 * * 0 docker exec tapedeck tapedeck-cli download WHRB jazztime --latest
 ```
 
 ## Docker Setup
@@ -148,8 +151,7 @@ td23/
 ├── pkg/
 │   └── tapedeck/           # Core library (public API)
 │       ├── tapedeck.go     # Main entry point
-│       ├── scheduler.go
-│       ├── recorder.go
+│       ├── downloader.go
 │       └── adapters/
 │           └── adapter.go  # Adapter interface
 ├── internal/
