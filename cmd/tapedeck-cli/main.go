@@ -443,6 +443,10 @@ func cmdScheduleDownload(args []string) error {
 		quotedShow = fmt.Sprintf("%q", showName)
 	}
 
+	// Build the cron line
+	cronLine := fmt.Sprintf("%s docker exec tapedeck tapedeck-cli download-show %s %s --latest",
+		schedule.RecommendedCron, callSign, quotedShow)
+
 	// Output the crontab line with comments
 	fmt.Printf("# %s on %s\n", showName, callSign)
 	fmt.Printf("# Airs: %s at %s\n", schedule.DayOfWeek, schedule.StartTime)
@@ -450,8 +454,9 @@ func cmdScheduleDownload(args []string) error {
 	if schedule.Notes != "" {
 		fmt.Printf("# Note: %s\n", schedule.Notes)
 	}
-	fmt.Printf("%s docker exec tapedeck tapedeck-cli download-show %s %s --latest\n",
-		schedule.RecommendedCron, callSign, quotedShow)
+	fmt.Printf("%s\n", cronLine)
+	fmt.Printf("\n# To install:\n")
+	fmt.Printf("(crontab -l 2>/dev/null; echo '%s') | crontab -\n", cronLine)
 
 	return nil
 }
