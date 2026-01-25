@@ -12,12 +12,12 @@ A web application for downloading radio show archives (mp3 files) from station a
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Backend   | Go         |
-| Database  | SQLite     |
+| Component | Technology          |
+|-----------|---------------------|
+| Backend   | Go                  |
+| Database  | SQLite              |
 | Frontend  | HTML/CSS/Vanilla JS |
-| Container | Docker     |
+| Container | Docker              |
 
 ## Architecture
 
