@@ -1,4 +1,4 @@
-// Tapedeck Frontend Application
+// Tapedeck Frontend Application - Mobile Version
 
 const state = {
     stations: [],
@@ -105,7 +105,7 @@ async function loadDownloads(showId) {
 
 // Render Functions
 function renderStations() {
-    stationSelect.innerHTML = '<option value="">Select station...</option>';
+    stationSelect.innerHTML = '<option value="">Station...</option>';
     state.stations.forEach(station => {
         const option = document.createElement('option');
         option.value = station.CallSign;
@@ -155,7 +155,6 @@ function renderDownloads() {
                 <div class="tape-date">${dateStr}</div>
                 <div class="tape-show">${download.Station} - ${download.Show}</div>
             </div>
-            <button class="tape-play-btn" title="Play">&#9654;</button>
         `;
 
         spine.addEventListener('click', () => playDownload(download));
@@ -203,7 +202,7 @@ function updateNowPlaying() {
     const download = state.currentDownload;
     const date = new Date(download.ArchiveDate);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-    nowPlaying.textContent = `${download.Station} - ${download.Show}\n${dateStr}`;
+    nowPlaying.textContent = `${download.Show} · ${dateStr}`;
 }
 
 function updatePlayButton() {
