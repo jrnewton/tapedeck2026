@@ -25,16 +25,12 @@ You are working in a Git repository.  Pls commit after each iteration is done an
 - Project structure must be as simple as possible.
 - Always ask when introducing third party code.
 
-# Running the Server
-The server runs via Docker Compose on port 8080:
-```
-docker compose build && docker compose up -d
-```
-To view logs: `docker compose logs -f`
-
-# Testing
-- Unit tests: `go test ./...`
-- E2E tests require Chromium and must run in Docker:
-  ```
-  docker build -f Dockerfile.test -t tapedeck-test . && docker run --rm tapedeck-test
-  ```
+# Makefile
+Use `make` for common tasks:
+- `make build` - Build binaries
+- `make run` - Run server via Docker Compose (port 8080)
+- `make stop` - Stop server
+- `make logs` - View server logs
+- `make test` - Run unit tests
+- `make test-e2e` - Run E2E tests (requires Docker with Chromium)
+- `make clean` - Remove build artifacts
