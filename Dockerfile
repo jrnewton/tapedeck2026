@@ -1,7 +1,10 @@
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum ./
+RUN go mod download
 COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
 RUN go build -o tapedeck ./cmd/tapedeck
 RUN go build -o tapedeck-cli ./cmd/tapedeck-cli
 
