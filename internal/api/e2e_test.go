@@ -425,3 +425,128 @@ func TestE2EConsoleClean(t *testing.T) {
 		t.Errorf("browser console had %d errors and %d exceptions on initial load", errors, exceptions)
 	}
 }
+
+// TestE2EURLStateUpdates verifies that selecting station/show updates the URL
+func TestE2EURLStateUpdates(t *testing.T) {
+	if os.Getenv("E2E_TEST") == "" {
+		t.Skip("Skipping E2E test; set E2E_TEST=1 to run")
+	}
+
+	server, _, serverCleanup := setupTestServer(t)
+	defer serverCleanup()
+
+	ctx, browserCleanup := newBrowserContext(t)
+	defer browserCleanup()
+
+	collector := newConsoleCollector(t)
+	collector.listen(ctx)
+
+	var urlAfterStation, urlAfterShow, urlAfterPlay string
+
+	err := chromedp.Run(ctx,
+		// Navigate to the page
+		chromedp.Navigate(server.URL),
+		chromedp.WaitVisible(`#station-select`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Select station
+		chromedp.SetValue(`#station-select`, "WMBR", chromedp.ByID),
+		chromedp.Evaluate(`document.getElementById('station-select').dispatchEvent(new Event('change'))`, nil),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Get URL after station selection
+		chromedp.Evaluate(`window.location.search`, &urlAfterStation),
+
+		// Select show
+		chromedp.SetValue(`#show-select`, "1", chromedp.ByID),
+		chromedp.Evaluate(`document.getElementById('show-select').dispatchEvent(new Event('change'))`, nil),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Get URL after show selection
+		chromedp.Evaluate(`window.location.search`, &urlAfterShow),
+
+		// Click on tape to play
+		chromedp.WaitVisible(`.tape-spine`, chromedp.ByQuery),
+		chromedp.Click(`.tape-spine`, chromedp.ByQuery),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Get URL after play
+		chromedp.Evaluate(`window.location.search`, &urlAfterPlay),
+	)
+
+	if err != nil {
+		t.Fatalf("chromedp run failed: %v", err)
+	}
+
+	// Validate URL states
+	if !strings.Contains(urlAfterStation, "station=WMBR") {
+		t.Errorf("expected URL to contain station=WMBR after station selection, got: %s", urlAfterStation)
+	}
+
+	if !strings.Contains(urlAfterShow, "station=WMBR") || !strings.Contains(urlAfterShow, "show=1") {
+		t.Errorf("expected URL to contain station=WMBR&show=1 after show selection, got: %s", urlAfterShow)
+	}
+
+	if !strings.Contains(urlAfterPlay, "play=") {
+		t.Errorf("expected URL to contain play= after clicking tape, got: %s", urlAfterPlay)
+	}
+
+	if collector.hasErrors() {
+		t.Error("browser console had errors during test")
+	}
+}
+
+// TestE2EURLStateRestoration verifies that navigating directly to URL with params restores state
+func TestE2EURLStateRestoration(t *testing.T) {
+	if os.Getenv("E2E_TEST") == "" {
+		t.Skip("Skipping E2E test; set E2E_TEST=1 to run")
+	}
+
+	server, _, serverCleanup := setupTestServer(t)
+	defer serverCleanup()
+
+	ctx, browserCleanup := newBrowserContext(t)
+	defer browserCleanup()
+
+	collector := newConsoleCollector(t)
+	collector.listen(ctx)
+
+	var stationValue, showValue string
+	var tapeSpines int
+
+	// Navigate directly to URL with station and show params
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/?station=WMBR&show=1"),
+		chromedp.WaitVisible(`#station-select`, chromedp.ByID),
+		chromedp.Sleep(1*time.Second), // Give time for state restoration
+
+		// Check that station is selected
+		chromedp.Evaluate(`document.getElementById('station-select').value`, &stationValue),
+
+		// Check that show is selected
+		chromedp.Evaluate(`document.getElementById('show-select').value`, &showValue),
+
+		// Check that downloads are loaded
+		chromedp.Evaluate(`document.querySelectorAll('.tape-spine').length`, &tapeSpines),
+	)
+
+	if err != nil {
+		t.Fatalf("chromedp run failed: %v", err)
+	}
+
+	if stationValue != "WMBR" {
+		t.Errorf("expected station to be WMBR, got: %s", stationValue)
+	}
+
+	if showValue != "1" {
+		t.Errorf("expected show to be 1, got: %s", showValue)
+	}
+
+	if tapeSpines < 1 {
+		t.Errorf("expected at least 1 tape spine after URL state restoration, got: %d", tapeSpines)
+	}
+
+	if collector.hasErrors() {
+		t.Error("browser console had errors during test")
+	}
+}
