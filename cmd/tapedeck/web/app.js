@@ -105,17 +105,52 @@ async function fetchJSON(url) {
     return fetchAndCache(url, cacheKey);
 }
 
-// Background refresh - silently update cache
+// Background refresh - update cache and re-render if data changed
 async function refreshCache(url, cacheKey) {
     try {
         const response = await fetch(url);
         if (response.ok) {
             const data = await response.json();
-            localStorage.setItem(cacheKey, JSON.stringify(data));
+            const newJson = JSON.stringify(data);
+            const oldJson = localStorage.getItem(cacheKey);
+
+            // Only update and re-render if data actually changed
+            if (newJson !== oldJson) {
+                localStorage.setItem(cacheKey, newJson);
+
+                // Re-render the relevant UI component
+                const handler = getCacheRefreshHandler(url);
+                if (handler) {
+                    handler(data);
+                }
+            }
         }
     } catch (e) {
         // Silently fail - we already returned cached data
     }
+}
+
+// Get handler for re-rendering when cache is refreshed with new data
+function getCacheRefreshHandler(url) {
+    if (url === '/api/stations') {
+        return (data) => {
+            state.stations = data;
+            renderStations();
+        };
+    }
+    if (url.match(/^\/api\/stations\/[^/]+\/shows$/)) {
+        return (data) => {
+            state.shows = data;
+            renderShows();
+        };
+    }
+    if (url.match(/^\/api\/shows\/\d+\/downloads/)) {
+        return (data) => {
+            state.downloads = data;
+            renderDownloads();
+        };
+    }
+    return null;
 }
 
 // Fetch from network and cache the result
