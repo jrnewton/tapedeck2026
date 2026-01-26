@@ -42,6 +42,8 @@ func main() {
 		err = cmdDownloadStatus(args)
 	case "schedule-download":
 		err = cmdScheduleDownload(args)
+	case "fix-downloads":
+		err = cmdFixDownloads(args)
 	case "help", "-h", "--help":
 		printUsage()
 	default:
@@ -261,8 +263,16 @@ func cmdDownloadShow(args []string) error {
 		return err
 	}
 
-	// Try to get show ID
+	// Ensure shows are cached, then get show ID
 	var showID *int64
+	shows, valid, _ := database.GetCachedShows(station.ID)
+	if !valid || len(shows) == 0 {
+		// Cache shows from adapter
+		showNames, err := adapter.ListShows()
+		if err == nil {
+			database.CacheShows(station.ID, showNames)
+		}
+	}
 	show, err := database.GetShowByName(station.ID, archive.ShowName)
 	if err == nil && show != nil {
 		showID = &show.ID
@@ -412,8 +422,12 @@ func formatStatus(status string) string {
 }
 
 func openDB() (*db.DB, error) {
-	dbPath := filepath.Join(defaultDataDir, dbFilename)
-	if err := os.MkdirAll(defaultDataDir, 0755); err != nil {
+	dataDir := os.Getenv("TAPEDECK_DATA_DIR")
+	if dataDir == "" {
+		dataDir = defaultDataDir
+	}
+	dbPath := filepath.Join(dataDir, dbFilename)
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
 	return db.Open(dbPath)
@@ -459,4 +473,104 @@ func cmdScheduleDownload(args []string) error {
 	fmt.Printf("(crontab -l 2>/dev/null; echo '%s') | crontab -\n", cronLine)
 
 	return nil
+}
+
+func cmdFixDownloads(args []string) error {
+	database, err := openDB()
+	if err != nil {
+		return err
+	}
+	defer database.Close()
+
+	// Get all downloads
+	downloads, err := database.ListDownloads("")
+	if err != nil {
+		return err
+	}
+
+	fixed := 0
+	for _, d := range downloads {
+		// Skip if already has a show_id
+		if d.ShowID != nil {
+			continue
+		}
+
+		// Try to extract show name from M3U URL or filepath
+		// URL format: https://wmbr.org/m3u/ShowName_YYYYMMDD_HHMM.m3u
+		// Filepath format: data/downloads/STATION_ShowName_YYYYMMDD.mp3
+		showName := extractShowName(d.M3UURL, d.Filepath)
+		if showName == "" {
+			fmt.Printf("Could not extract show name for download %d\n", d.ID)
+			continue
+		}
+
+		// Ensure shows are cached for this station
+		station, err := database.GetStation(d.Station)
+		if err != nil {
+			continue
+		}
+
+		shows, valid, _ := database.GetCachedShows(station.ID)
+		if !valid || len(shows) == 0 {
+			adapter, err := tapedeck.GetAdapter(d.Station)
+			if err == nil {
+				showNames, err := adapter.ListShows()
+				if err == nil {
+					database.CacheShows(station.ID, showNames)
+				}
+			}
+		}
+
+		// Find the show
+		show, err := database.GetShowByName(station.ID, showName)
+		if err != nil || show == nil {
+			fmt.Printf("Show not found for download %d: %s\n", d.ID, showName)
+			continue
+		}
+
+		// Link the download to the show
+		err = database.LinkDownloadToShow(d.ID, show.ID)
+		if err != nil {
+			fmt.Printf("Failed to link download %d to show %s: %v\n", d.ID, showName, err)
+			continue
+		}
+
+		fmt.Printf("Fixed download %d: linked to show '%s'\n", d.ID, showName)
+		fixed++
+	}
+
+	fmt.Printf("\nFixed %d downloads\n", fixed)
+	return nil
+}
+
+func extractShowName(m3uURL, filepath string) string {
+	// Try M3U URL first: https://wmbr.org/m3u/ShowName_YYYYMMDD_HHMM.m3u
+	if m3uURL != "" {
+		parts := strings.Split(m3uURL, "/")
+		if len(parts) > 0 {
+			filename := parts[len(parts)-1]
+			// Remove .m3u extension
+			filename = strings.TrimSuffix(filename, ".m3u")
+			// Split by underscore and take the show name part
+			parts := strings.Split(filename, "_")
+			if len(parts) >= 1 {
+				return parts[0]
+			}
+		}
+	}
+
+	// Try filepath: STATION_ShowName_YYYYMMDD.mp3
+	if filepath != "" {
+		parts := strings.Split(filepath, "/")
+		if len(parts) > 0 {
+			filename := parts[len(parts)-1]
+			filename = strings.TrimSuffix(filename, ".mp3")
+			parts := strings.Split(filename, "_")
+			if len(parts) >= 2 {
+				return parts[1] // Skip station prefix
+			}
+		}
+	}
+
+	return ""
 }

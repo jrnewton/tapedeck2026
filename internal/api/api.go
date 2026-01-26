@@ -68,6 +68,11 @@ func (s *Server) handleListShows(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ensure we return [] instead of null for empty results
+	if shows == nil {
+		shows = []db.Show{}
+	}
+
 	writeJSON(w, shows)
 }
 

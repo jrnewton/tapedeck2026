@@ -539,6 +539,19 @@ func (db *DB) ListDownloads(callSign string) ([]Download, error) {
 	return db.queryDownloads(conn, query, args)
 }
 
+// LinkDownloadToShow updates a download's show_id.
+func (db *DB) LinkDownloadToShow(downloadID int64, showID int64) error {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return err
+	}
+	defer db.pool.Put(conn)
+
+	return sqlitex.Execute(conn, `UPDATE downloads SET show_id = ?, updated_at = ? WHERE id = ?`, &sqlitex.ExecOptions{
+		Args: []any{showID, time.Now().Format(time.RFC3339), downloadID},
+	})
+}
+
 // GetDownload returns a download by ID.
 func (db *DB) GetDownload(id int64) (*Download, error) {
 	conn, err := db.pool.Take(context.Background())
