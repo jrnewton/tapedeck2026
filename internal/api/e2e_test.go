@@ -137,6 +137,20 @@ func setupTestServer(t *testing.T) (*httptest.Server, *db.DB, func()) {
 	return server, database, cleanup
 }
 
+// mockAudioPlayback injects JavaScript to mock HTMLAudioElement.play() for headless testing.
+// Headless Chromium can't play audio, so this prevents NotSupportedError exceptions.
+// The mock returns a resolved Promise and dispatches the 'play' event to trigger app listeners.
+func mockAudioPlayback() chromedp.Action {
+	return chromedp.Evaluate(`
+		HTMLAudioElement.prototype.play = function() {
+			// Dispatch play event so app event listeners fire
+			this.dispatchEvent(new Event('play'));
+			return Promise.resolve();
+		};
+		true;
+	`, nil)
+}
+
 // newBrowserContext creates a chromedp context for headless browser testing on Linux
 func newBrowserContext(t *testing.T) (context.Context, context.CancelFunc) {
 	t.Helper()
@@ -347,6 +361,10 @@ func TestE2EClickCollectionItem(t *testing.T) {
 		// Navigate and select station/show
 		chromedp.Navigate(server.URL),
 		chromedp.WaitVisible(`#station-select`, chromedp.ByID),
+
+		// Mock audio playback for headless browser
+		mockAudioPlayback(),
+
 		chromedp.Sleep(500*time.Millisecond),
 
 		// Select station
@@ -447,6 +465,10 @@ func TestE2EURLStateUpdates(t *testing.T) {
 		// Navigate to the page
 		chromedp.Navigate(server.URL),
 		chromedp.WaitVisible(`#station-select`, chromedp.ByID),
+
+		// Mock audio playback for headless browser
+		mockAudioPlayback(),
+
 		chromedp.Sleep(500*time.Millisecond),
 
 		// Select station
