@@ -320,7 +320,9 @@ func cmdDownloadShow(args []string) error {
 	}
 
 	if d.Status == db.StatusCompleted {
-		fmt.Printf("Download completed: %s\n", d.Filepath)
+		// Reconstruct full path for display
+		fullPath := filepath.Join(outputDir, d.Filepath)
+		fmt.Printf("Download completed: %s\n", fullPath)
 	} else if d.Status == db.StatusFailed {
 		fmt.Printf("Download failed: %s\n", d.Error)
 	}
@@ -345,8 +347,10 @@ func runDownload(downloadID int64, adapter tapedeck.Adapter, archive *tapedeck.A
 		return
 	}
 
-	// Update status to completed
-	database.UpdateDownloadStatus(downloadID, db.StatusCompleted, destPath, "")
+	// Update status to completed - store only the filename (not full path)
+	// so it works across host CLI, Docker CLI, and Docker Web contexts
+	filename := filepath.Base(destPath)
+	database.UpdateDownloadStatus(downloadID, db.StatusCompleted, filename, "")
 }
 
 func cmdDownloadStatus(args []string) error {
@@ -393,6 +397,12 @@ func cmdDownloadStatus(args []string) error {
 }
 
 func printDownloadDetail(d *db.Download) {
+	dataDir := os.Getenv("TAPEDECK_DATA_DIR")
+	if dataDir == "" {
+		dataDir = defaultDataDir
+	}
+	downloadsDir := filepath.Join(dataDir, "downloads")
+
 	fmt.Printf("[%d] %s - %s (%s)\n", d.ID, d.Station, d.Show, d.ArchiveDate.Format("2006-01-02"))
 	fmt.Printf("  Status:  %s\n", formatStatus(d.Status))
 	fmt.Printf("  Started: %s\n", d.CreatedAt.Format("2006-01-02 15:04:05"))
@@ -402,7 +412,9 @@ func printDownloadDetail(d *db.Download) {
 	}
 
 	if d.Filepath != "" {
-		fmt.Printf("  File:    %s\n", d.Filepath)
+		// Reconstruct full path from stored filename
+		fullPath := filepath.Join(downloadsDir, d.Filepath)
+		fmt.Printf("  File:    %s\n", fullPath)
 	}
 
 	if d.Error != "" {
@@ -479,19 +491,12 @@ func cmdScheduleDownload(args []string) error {
 	return nil
 }
 
-func cmdFixDownloads(args []string) error {
+func cmdFixDownloads(_ []string) error {
 	database, err := openDB()
 	if err != nil {
 		return err
 	}
 	defer database.Close()
-
-	// Get the data directory for path fixing
-	dataDir := os.Getenv("TAPEDECK_DATA_DIR")
-	if dataDir == "" {
-		dataDir = defaultDataDir
-	}
-	downloadsDir := filepath.Join(dataDir, "downloads")
 
 	// Get all downloads
 	downloads, err := database.ListDownloads("")
@@ -502,16 +507,18 @@ func cmdFixDownloads(args []string) error {
 	fixed := 0
 	pathsFixed := 0
 	for _, d := range downloads {
-		// Fix relative filepaths to absolute paths
-		if d.Filepath != "" && !filepath.IsAbs(d.Filepath) {
-			// Extract just the filename
+		// Migrate absolute paths or paths with directories to just filenames
+		// This ensures paths work across host CLI, Docker CLI, and Docker Web contexts
+		if d.Filepath != "" {
 			filename := filepath.Base(d.Filepath)
-			newPath := filepath.Join(downloadsDir, filename)
-			if err := database.UpdateDownloadStatus(d.ID, d.Status, newPath, d.Error); err != nil {
-				fmt.Printf("Failed to fix filepath for download %d: %v\n", d.ID, err)
-			} else {
-				fmt.Printf("Fixed filepath for download %d: %s -> %s\n", d.ID, d.Filepath, newPath)
-				pathsFixed++
+			if filename != d.Filepath {
+				// Path contains directory components - migrate to just filename
+				if err := database.UpdateDownloadStatus(d.ID, d.Status, filename, d.Error); err != nil {
+					fmt.Printf("Failed to fix filepath for download %d: %v\n", d.ID, err)
+				} else {
+					fmt.Printf("Fixed filepath for download %d: %s -> %s\n", d.ID, d.Filepath, filename)
+					pathsFixed++
+				}
 			}
 		}
 

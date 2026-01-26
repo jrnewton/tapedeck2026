@@ -194,7 +194,7 @@ func TestListDownloads_FilterByStatus(t *testing.T) {
 		ArchiveDate: time.Now(),
 		M3UURL:      "http://2.m3u",
 	})
-	database.UpdateDownloadStatus(id1, db.StatusCompleted, "/path.mp3", "")
+	database.UpdateDownloadStatus(id1, db.StatusCompleted, "show1.mp3", "")
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)
@@ -308,7 +308,8 @@ func TestStreamAudio(t *testing.T) {
 
 	// Create a test audio file
 	audioContent := []byte("fake audio content for testing")
-	audioPath := filepath.Join(server.DownloadsDir, "test.mp3")
+	audioFilename := "test.mp3"
+	audioPath := filepath.Join(server.DownloadsDir, audioFilename)
 	if err := os.WriteFile(audioPath, audioContent, 0644); err != nil {
 		t.Fatalf("failed to create test audio file: %v", err)
 	}
@@ -322,7 +323,8 @@ func TestStreamAudio(t *testing.T) {
 		ArchiveDate: time.Now(),
 		M3UURL:      "http://test.m3u",
 	})
-	database.UpdateDownloadStatus(id, db.StatusCompleted, audioPath, "")
+	// Store just the filename (not full path) - this is the new behavior
+	database.UpdateDownloadStatus(id, db.StatusCompleted, audioFilename, "")
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)
@@ -371,8 +373,9 @@ func TestStreamAudio_PathTraversal(t *testing.T) {
 	server, database := setupTestServer(t)
 	defer database.Close()
 
-	// Try to access file outside downloads directory
-	outsidePath := "/etc/passwd"
+	// Try to access file outside downloads directory using path traversal
+	// The database stores filenames, but a malicious entry could try "../../etc/passwd"
+	maliciousFilename := "../../etc/passwd"
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
 	database.CacheShows(station.ID, []string{"Show1"})
@@ -383,7 +386,7 @@ func TestStreamAudio_PathTraversal(t *testing.T) {
 		ArchiveDate: time.Now(),
 		M3UURL:      "http://test.m3u",
 	})
-	database.UpdateDownloadStatus(id, db.StatusCompleted, outsidePath, "")
+	database.UpdateDownloadStatus(id, db.StatusCompleted, maliciousFilename, "")
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)

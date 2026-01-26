@@ -394,8 +394,8 @@ func TestUpdateDownloadStatus(t *testing.T) {
 		t.Errorf("expected status %q, got %q", StatusDownloading, d.Status)
 	}
 
-	// Update to completed with filepath
-	err = db.UpdateDownloadStatus(id, StatusCompleted, "/path/to/file.mp3", "")
+	// Update to completed with filename (not full path - paths constructed at runtime)
+	err = db.UpdateDownloadStatus(id, StatusCompleted, "WMBR_Show1_20260125.mp3", "")
 	if err != nil {
 		t.Fatalf("failed to update status: %v", err)
 	}
@@ -404,8 +404,8 @@ func TestUpdateDownloadStatus(t *testing.T) {
 	if d.Status != StatusCompleted {
 		t.Errorf("expected status %q, got %q", StatusCompleted, d.Status)
 	}
-	if d.Filepath != "/path/to/file.mp3" {
-		t.Errorf("expected filepath %q, got %q", "/path/to/file.mp3", d.Filepath)
+	if d.Filepath != "WMBR_Show1_20260125.mp3" {
+		t.Errorf("expected filepath %q, got %q", "WMBR_Show1_20260125.mp3", d.Filepath)
 	}
 }
 
@@ -459,7 +459,7 @@ func TestListDownloadsByStatus(t *testing.T) {
 	id3, _ := db.InsertDownload(&Download{StationID: station.ID, ShowID: &show.ID, ArchiveDate: time.Now(), M3UURL: "http://3.m3u"})
 
 	db.UpdateDownloadStatus(id1, StatusDownloading, "", "")
-	db.UpdateDownloadStatus(id2, StatusCompleted, "/path.mp3", "")
+	db.UpdateDownloadStatus(id2, StatusCompleted, "show.mp3", "")
 	// id3 stays pending
 
 	// List pending and downloading
@@ -705,7 +705,7 @@ func TestListDownloadsByShowID(t *testing.T) {
 	db.InsertDownload(&Download{StationID: station.ID, ShowID: &show2.ID, ArchiveDate: time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC), M3UURL: "http://3.m3u"})
 
 	// Update one to completed
-	db.UpdateDownloadStatus(id1, StatusCompleted, "/path.mp3", "")
+	db.UpdateDownloadStatus(id1, StatusCompleted, "show1.mp3", "")
 
 	// List all downloads for show1
 	downloads, err := db.ListDownloadsByShowID(show1.ID, "")

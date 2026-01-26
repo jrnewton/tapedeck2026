@@ -50,7 +50,7 @@ func main() {
 
 	dataDir := os.Getenv("TAPEDECK_DATA_DIR")
 	if dataDir == "" {
-		dataDir = "data"
+		dataDir = "./data"
 	}
 
 	// Ensure data directory exists

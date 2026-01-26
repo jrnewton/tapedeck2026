@@ -154,8 +154,13 @@ func (s *Server) handleStreamAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Security: validate filepath is within downloads directory
-	absPath, err := filepath.Abs(download.Filepath)
+	// Construct full path from stored filename
+	// Database stores only filenames (e.g., "WMBR_ShowName_20260124.mp3")
+	// so paths work across host CLI, Docker CLI, and Docker Web contexts
+	fullPath := filepath.Join(s.DownloadsDir, download.Filepath)
+
+	// Security: validate constructed path is within downloads directory (defense in depth)
+	absPath, err := filepath.Abs(fullPath)
 	if err != nil {
 		http.Error(w, "invalid filepath", http.StatusBadRequest)
 		return
