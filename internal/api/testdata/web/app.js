@@ -112,7 +112,8 @@ function renderDownloads() {
             weekday: 'short',
             year: 'numeric',
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            timeZone: 'UTC'
         });
 
         spine.innerHTML = `
@@ -149,7 +150,7 @@ function updateNowPlaying() {
 
     const download = state.currentDownload;
     const date = new Date(download.ArchiveDate);
-    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
     nowPlaying.textContent = `${download.Station} - ${download.Show}\n${dateStr}`;
 }
 
