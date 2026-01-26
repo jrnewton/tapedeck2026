@@ -184,6 +184,7 @@ async function loadStations() {
     } catch (error) {
         console.error('Failed to load stations:', error);
         state.stations = [];
+        renderStations();
     }
 }
 
@@ -194,6 +195,7 @@ async function loadShows(callSign) {
     } catch (error) {
         console.error('Failed to load shows:', error);
         state.shows = [];
+        renderShows();
     }
 }
 
@@ -204,6 +206,7 @@ async function loadDownloads(showId) {
     } catch (error) {
         console.error('Failed to load downloads:', error);
         state.downloads = [];
+        renderDownloads();
     }
 }
 
