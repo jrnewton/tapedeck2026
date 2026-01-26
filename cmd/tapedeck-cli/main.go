@@ -206,10 +206,14 @@ func cmdDownloadShow(args []string) error {
 		*latest = true
 	}
 
-	// Set output directory
+	// Set output directory - use TAPEDECK_DATA_DIR for consistency with web server
 	outputDir := *output
 	if outputDir == "" {
-		outputDir = filepath.Join(defaultDataDir, "downloads")
+		dataDir := os.Getenv("TAPEDECK_DATA_DIR")
+		if dataDir == "" {
+			dataDir = defaultDataDir
+		}
+		outputDir = filepath.Join(dataDir, "downloads")
 	}
 
 	adapter, err := tapedeck.GetAdapter(callSign)
@@ -482,6 +486,13 @@ func cmdFixDownloads(args []string) error {
 	}
 	defer database.Close()
 
+	// Get the data directory for path fixing
+	dataDir := os.Getenv("TAPEDECK_DATA_DIR")
+	if dataDir == "" {
+		dataDir = defaultDataDir
+	}
+	downloadsDir := filepath.Join(dataDir, "downloads")
+
 	// Get all downloads
 	downloads, err := database.ListDownloads("")
 	if err != nil {
@@ -489,8 +500,22 @@ func cmdFixDownloads(args []string) error {
 	}
 
 	fixed := 0
+	pathsFixed := 0
 	for _, d := range downloads {
-		// Skip if already has a show_id
+		// Fix relative filepaths to absolute paths
+		if d.Filepath != "" && !filepath.IsAbs(d.Filepath) {
+			// Extract just the filename
+			filename := filepath.Base(d.Filepath)
+			newPath := filepath.Join(downloadsDir, filename)
+			if err := database.UpdateDownloadStatus(d.ID, d.Status, newPath, d.Error); err != nil {
+				fmt.Printf("Failed to fix filepath for download %d: %v\n", d.ID, err)
+			} else {
+				fmt.Printf("Fixed filepath for download %d: %s -> %s\n", d.ID, d.Filepath, newPath)
+				pathsFixed++
+			}
+		}
+
+		// Skip show linking if already has a show_id
 		if d.ShowID != nil {
 			continue
 		}
@@ -539,7 +564,7 @@ func cmdFixDownloads(args []string) error {
 		fixed++
 	}
 
-	fmt.Printf("\nFixed %d downloads\n", fixed)
+	fmt.Printf("\nFixed %d show links, %d filepaths\n", fixed, pathsFixed)
 	return nil
 }
 
