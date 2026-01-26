@@ -89,7 +89,9 @@ DONE: Adjust page title based on station/show/download.
     - Title format: "Tapedeck - <context>" where context is station, show, or download
     - Updates dynamically when selecting station, show, or playing a download
     - Works with URL state restoration (direct links)
-TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
+DONE: Add favicon.
+    - Using cassette-tape.png from tapedeck2 repo
+    - Cached by service worker for offline use
 TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
 TODO: Adjust layout, move station down to be above show, put a blurb in upper right corner or link to "about"
 TODO: selected download is not decorated consistently on IOS.
