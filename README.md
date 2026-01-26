@@ -15,10 +15,13 @@ make clean    # Remove build artifacts
 ## Production Deployment (DigitalOcean)
 
 ### Server Details
+- **URL**: https://tapedeck.us
 - **Droplet**: tapedeck (s-1vcpu-1gb, $6/mo)
 - **IP**: 68.183.125.135
 - **Region**: nyc1
 - **Data path**: /opt/tapedeck/data
+- **Reverse proxy**: Caddy (auto HTTPS via Let's Encrypt)
+- **Firewall**: UFW (22, 80, 443 only)
 
 ### SSH Access
 ```bash
@@ -59,6 +62,44 @@ ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
 ```bash
 ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
   "docker ps && df -h /opt/tapedeck"
+```
+
+### Caddy (Reverse Proxy / HTTPS)
+```bash
+# View Caddy config
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "cat /etc/caddy/Caddyfile"
+
+# Edit Caddy config
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "nano /etc/caddy/Caddyfile"
+
+# Restart Caddy (after config changes)
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "systemctl restart caddy"
+
+# View Caddy logs
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "journalctl -u caddy -f"
+
+# Check certificate status
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "caddy list-certificates"
+```
+
+### Firewall (UFW)
+```bash
+# Check firewall status
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "ufw status"
+
+# Allow a port (if needed)
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "ufw allow 8080/tcp"
+
+# Deny a port
+ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+  "ufw deny 8080/tcp"
 ```
 
 ### DigitalOcean CLI (doctl)

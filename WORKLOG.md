@@ -71,7 +71,10 @@ DONE: Review deployment requirements and deploy to DigitalOcean.
     - Evaluated Fly.io vs DigitalOcean (DO cheaper long-term)
     - Created droplet: tapedeck (s-1vcpu-1gb, nyc1, $6/mo)
     - Deployed Docker container with existing data (630MB, 7 shows)
-    - Live at: http://68.183.125.135:8080
+    - Configured Caddy reverse proxy with automatic Let's Encrypt HTTPS
+    - Configured UFW firewall (22, 80, 443 only)
+    - Docker bound to localhost:8080 (not exposed externally)
+    - Live at: https://tapedeck.us
     - Deployment commands documented in README.md
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Implement "About" button

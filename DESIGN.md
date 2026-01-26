@@ -21,20 +21,18 @@ A web application for downloading radio show archives (mp3 files) from station a
 
 ## Architecture
 
+### Local Development
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │                           Docker Host                             │
 │                                                                   │
-│  ┌────────────┐                                                   │
-│  │ Host Cron  │───── docker exec ─────┐                           │
-│  └────────────┘                       │                           │
-│                                       ▼                           │
 │  ┌─────────────────────────────────────────────────────────────┐  │
 │  │           Docker Container (restart: unless-stopped)        │  │
 │  │                                                             │  │
 │  │  ┌───────────────────────────────────────────────────────┐  │  │
 │  │  │              REST API (HTTP Server)                   │  │  │
 │  │  │         Serves web frontend + JSON API                │  │  │
+│  │  │                   :8080                                │  │  │
 │  │  └────────────────────────┬──────────────────────────────┘  │  │
 │  │                           │                                 │  │
 │  │  ┌────────────────────────▼──────────────────────────────┐  │  │
@@ -57,6 +55,73 @@ A web application for downloading radio show archives (mp3 files) from station a
 │                     └───────────────────┘                         │
 └───────────────────────────────────────────────────────────────────┘
 ```
+
+### Production (DigitalOcean)
+```
+                    Internet
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│                    DigitalOcean Droplet (tapedeck)                   │
+│                    s-1vcpu-1gb / nyc1 / $6/mo                        │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                         UFW Firewall                           │  │
+│  │              Allow: 22 (SSH), 80 (HTTP), 443 (HTTPS)           │  │
+│  │                     Block: everything else                     │  │
+│  └──────────────────────────────┬─────────────────────────────────┘  │
+│                                 │                                    │
+│                                 ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │                    Caddy (reverse proxy)                       │  │
+│  │         - Listens on :80 and :443                              │  │
+│  │         - Auto HTTPS via Let's Encrypt                         │  │
+│  │         - HTTP → HTTPS redirect                                │  │
+│  │         - Proxies to localhost:8080                            │  │
+│  └──────────────────────────────┬─────────────────────────────────┘  │
+│                                 │                                    │
+│                                 ▼                                    │
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │           Docker Container (restart: unless-stopped)           │  │
+│  │                     localhost:8080 only                        │  │
+│  │  ┌──────────────────────────────────────────────────────────┐  │  │
+│  │  │              REST API (HTTP Server)                      │  │  │
+│  │  │         Serves web frontend + JSON API                   │  │  │
+│  │  └────────────────────────┬─────────────────────────────────┘  │  │
+│  │                           │                                    │  │
+│  │  ┌────────────────────────▼─────────────────────────────────┐  │  │
+│  │  │            Core Library (tapedeck pkg)                   │  │  │
+│  │  │       ┌──────────────┐       ┌──────────────┐            │  │  │
+│  │  │       │  Downloader  │       │   Adapters   │            │  │  │
+│  │  │       └──────────────┘       └──────────────┘            │  │  │
+│  │  │                    │                                     │  │  │
+│  │  │             ┌──────▼──────┐                              │  │  │
+│  │  │             │   SQLite    │                              │  │  │
+│  │  │             └─────────────┘                              │  │  │
+│  │  └──────────────────────────────────────────────────────────┘  │  │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                               │                                      │
+│                     ┌─────────▼───────────────┐                      │
+│                     │  /opt/tapedeck/data     │                      │
+│                     │  - tapedeck.db          │                      │
+│                     │  - downloads/           │                      │
+│                     └─────────────────────────┘                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Production Infrastructure
+
+| Component | Details                                      |
+|-----------|----------------------------------------------|
+| Hosting   | DigitalOcean Droplet (s-1vcpu-1gb)           |
+| Region    | nyc1                                         |
+| OS        | Ubuntu 24.04 LTS                             |
+| Firewall  | UFW (22, 80, 443 only)                       |
+| TLS       | Caddy with automatic Let's Encrypt           |
+| Container | Docker with docker-compose                   |
+| Data      | /opt/tapedeck/data (SQLite + MP3s)           |
+| Domain    | tapedeck.us                                  |
+| Cost      | ~$6/month                                    |
 
 ## Components
 
