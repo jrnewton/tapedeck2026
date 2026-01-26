@@ -34,3 +34,9 @@ Use `make` for common tasks:
 - `make test` - Run unit tests
 - `make test-e2e` - Run E2E tests (requires Docker with Chromium)
 - `make clean` - Remove build artifacts
+
+# Offline/PWA Versioning
+The app uses two separate version numbers for offline functionality:
+
+- **IndexedDB version** (`DB_VERSION` in `offline.js`): Controls the database schema. Only increment when you change the structure (add/remove object stores, change indexes). Existing saved audio blobs remain valid across schema-compatible versions.
+- **SW Cache version** (`CACHE_VERSION` in `sw.js`): Controls which static files (HTML/JS/CSS) are cached. Increment when app code changes so users get the updated files.
