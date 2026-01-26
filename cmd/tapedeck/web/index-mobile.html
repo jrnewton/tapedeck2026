@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tapedeck</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style-mobile.css">
+</head>
+<body>
+    <header>
+        <h1>TAPEDECK</h1>
+        <div class="header-station">
+            <select id="station-select">
+                <option value="">Station...</option>
+            </select>
+        </div>
+    </header>
+
+    <div class="show-selector">
+        <select id="show-select" disabled>
+            <option value="">Select show...</option>
+        </select>
+    </div>
+
+    <main>
+        <div id="tape-list" class="tape-list">
+            <p class="empty-message">Select a station and show to view downloads</p>
+        </div>
+    </main>
+
+    <div class="mini-player">
+        <div class="mini-tape">
+            <div class="mini-reel left-reel">
+                <div class="mini-reel-center"></div>
+            </div>
+            <div class="mini-label">
+                <span id="now-playing">No tape loaded</span>
+            </div>
+            <div class="mini-reel right-reel">
+                <div class="mini-reel-center"></div>
+            </div>
+        </div>
+
+        <div class="mini-progress">
+            <span id="time-current">0:00</span>
+            <input type="range" id="progress-bar" min="0" max="100" value="0">
+            <span id="time-total">0:00</span>
+        </div>
+
+        <div class="mini-controls">
+            <button id="btn-prev" title="Previous">
+                <span class="icon">|&lt;&lt;</span>
+            </button>
+            <button id="btn-play" title="Play/Pause">
+                <span class="icon play-icon">&#9654;</span>
+            </button>
+            <button id="btn-stop" title="Stop">
+                <span class="icon">&#9632;</span>
+            </button>
+            <button id="btn-next" title="Next">
+                <span class="icon">&gt;&gt;|</span>
+            </button>
+        </div>
+    </div>
+
+    <audio id="audio-player"></audio>
+    <script src="app-mobile.js"></script>
+</body>
+</html>
