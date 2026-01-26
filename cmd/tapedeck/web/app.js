@@ -168,12 +168,21 @@ function playDownload(download, shouldUpdateURL = true) {
     state.currentDownload = download;
     audioPlayer.src = `/api/audio/${download.ID}`;
     audioPlayer.load();
-    audioPlayer.play();
+
+    // Optimistically set playing state (will be corrected if autoplay is blocked)
     state.isPlaying = true;
     updateNowPlaying();
     updatePlayButton();
     startReels();
     renderDownloads(); // Update active state
+
+    audioPlayer.play().catch(error => {
+        // Autoplay was prevented by browser policy
+        console.log('Playback blocked:', error.message);
+        state.isPlaying = false;
+        updatePlayButton();
+        stopReels();
+    });
 
     if (shouldUpdateURL) {
         const params = getURLParams();
