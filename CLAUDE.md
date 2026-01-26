@@ -25,6 +25,13 @@ You are working in a Git repository.  Pls commit after each iteration is done an
 - Project structure must be as simple as possible.
 - Always ask when introducing third party code.
 
+# Running the Server
+The server runs via Docker Compose on port 8080:
+```
+docker compose build && docker compose up -d
+```
+To view logs: `docker compose logs -f`
+
 # Testing
 - Unit tests: `go test ./...`
 - E2E tests require Chromium and must run in Docker:
