@@ -550,3 +550,71 @@ func TestE2EURLStateRestoration(t *testing.T) {
 		t.Error("browser console had errors during test")
 	}
 }
+
+// TestE2EURLStateRestorationWithPlay verifies that navigating to URL with play= param
+// correctly loads the track and shows proper UI state (not falsely showing "playing")
+func TestE2EURLStateRestorationWithPlay(t *testing.T) {
+	if os.Getenv("E2E_TEST") == "" {
+		t.Skip("Skipping E2E test; set E2E_TEST=1 to run")
+	}
+
+	server, _, serverCleanup := setupTestServer(t)
+	defer serverCleanup()
+
+	ctx, browserCleanup := newBrowserContext(t)
+	defer browserCleanup()
+
+	collector := newConsoleCollector(t)
+	collector.listen(ctx)
+
+	var nowPlayingText, playButtonIcon, audioSrc string
+	var leftReelSpinning, rightReelSpinning bool
+
+	// Navigate directly to URL with play parameter (no prior user interaction)
+	err := chromedp.Run(ctx,
+		chromedp.Navigate(server.URL+"/?station=WMBR&show=1&play=1"),
+		chromedp.WaitVisible(`#station-select`, chromedp.ByID),
+		chromedp.Sleep(1*time.Second), // Give time for state restoration and autoplay attempt
+
+		// Check that now-playing shows the track info (track should be loaded)
+		chromedp.Text(`#now-playing`, &nowPlayingText, chromedp.ByID),
+
+		// Check that audio source is set (track should be loaded)
+		chromedp.Evaluate(`document.getElementById('audio-player').src`, &audioSrc),
+
+		// Check the play button state - should show play icon (not pause) since autoplay is blocked
+		chromedp.Evaluate(`document.querySelector('#btn-play .icon').innerHTML`, &playButtonIcon),
+
+		// Check reels are NOT spinning (since autoplay is blocked)
+		chromedp.Evaluate(`document.querySelector('.left-reel').classList.contains('spinning')`, &leftReelSpinning),
+		chromedp.Evaluate(`document.querySelector('.right-reel').classList.contains('spinning')`, &rightReelSpinning),
+	)
+
+	if err != nil {
+		t.Fatalf("chromedp run failed: %v", err)
+	}
+
+	// Track should be loaded and displayed
+	if nowPlayingText == "" || nowPlayingText == "No tape loaded" {
+		t.Errorf("expected now-playing to show track info, got: %q", nowPlayingText)
+	}
+
+	if audioSrc == "" || !strings.Contains(audioSrc, "/api/audio/") {
+		t.Errorf("expected audio source to be set to API endpoint, got: %s", audioSrc)
+	}
+
+	// UI should NOT show playing state (autoplay blocked without user interaction)
+	// Play button should show play icon (▶ = &#9654;), not pause icon (❚❚)
+	if strings.Contains(playButtonIcon, "9616") { // 9616 is the pause bar character
+		t.Errorf("expected play button to show play icon (autoplay blocked), but got pause icon: %s", playButtonIcon)
+	}
+
+	if leftReelSpinning || rightReelSpinning {
+		t.Errorf("expected reels to NOT be spinning (autoplay blocked), left=%v right=%v", leftReelSpinning, rightReelSpinning)
+	}
+
+	// Should not have console errors (we handle the autoplay rejection gracefully)
+	if collector.hasErrors() {
+		t.Error("browser console had errors during test")
+	}
+}
