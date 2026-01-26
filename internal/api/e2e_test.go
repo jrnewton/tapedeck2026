@@ -17,8 +17,8 @@ import (
 
 	"github.com/chromedp/cdproto/runtime"
 	"github.com/chromedp/chromedp"
-	"github.com/jnewton/tapedeck/internal/api"
-	"github.com/jnewton/tapedeck/internal/db"
+	"local/tapedeck/internal/api"
+	"local/tapedeck/internal/db"
 )
 
 //go:embed testdata/web/*

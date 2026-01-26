@@ -1,6 +1,6 @@
 package wmbr
 
-import "github.com/jnewton/tapedeck/pkg/tapedeck"
+import "local/tapedeck/pkg/tapedeck"
 
 func init() {
 	tapedeck.RegisterAdapter("WMBR", func() tapedeck.Adapter {

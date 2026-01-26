@@ -8,11 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jnewton/tapedeck/internal/api"
-	"github.com/jnewton/tapedeck/internal/db"
+	"local/tapedeck/internal/api"
+	"local/tapedeck/internal/db"
 
 	// Register adapters
-	_ "github.com/jnewton/tapedeck/internal/adapters/wmbr"
+	_ "local/tapedeck/internal/adapters/wmbr"
 )
 
 //go:embed web/*

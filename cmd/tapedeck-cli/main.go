@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jnewton/tapedeck/internal/db"
-	"github.com/jnewton/tapedeck/pkg/tapedeck"
+	"local/tapedeck/internal/db"
+	"local/tapedeck/pkg/tapedeck"
 
 	// Register adapters
-	_ "github.com/jnewton/tapedeck/internal/adapters/wmbr"
+	_ "local/tapedeck/internal/adapters/wmbr"
 )
 
 const (

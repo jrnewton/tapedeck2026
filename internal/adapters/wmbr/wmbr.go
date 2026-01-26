@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jnewton/tapedeck/internal/m3u"
-	"github.com/jnewton/tapedeck/pkg/tapedeck"
+	"local/tapedeck/internal/m3u"
+	"local/tapedeck/pkg/tapedeck"
 	"golang.org/x/net/html"
 )
 
