@@ -36,12 +36,13 @@ DONE: Build frontend GUI that allow for download playback in browser
     - Fixed: UTC timezone handling for date display in collection
     - Added: fix-downloads CLI command to repair unlinked downloads and relative paths
     - Added: E2E browser tests using chromedp (run in Docker with Chromium)
-TODO: Adjust GUI design so UI choice are saved in URL 
-    - selecting a station should provide a link for that specific UI
-    - selecting a show should provide a link for that specific UI 
-    - selecting a collection/download of the show should provide a link for that etc,
-    - these links are shareble with others.
-    - Let's review the different designs possible.
+DONE: Adjust GUI design so UI choice are saved in URL
+    - URL params: ?station=WMBR&show=1&play=1
+    - Selecting station/show/track updates URL via history.pushState
+    - Direct navigation to URL restores full UI state
+    - Browser back/forward navigation supported via popstate
+    - Track loads without autoplay when restoring from URL (avoids browser policy issues)
+    - E2E tests for URL state updates and restoration
 TODO: Adjust GUI design for mobile-first.
 TODO: Implement "download to device" option in GUI that will save audio file in browser local storage for offline listening.
 TODO: Review all test cases and test coverage.
