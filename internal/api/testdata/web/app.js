@@ -8,6 +8,39 @@ const state = {
     isPlaying: false
 };
 
+// URL State Management
+function getURLParams() {
+    return new URLSearchParams(window.location.search);
+}
+
+function updateURL(params) {
+    const url = new URL(window.location);
+    url.search = params.toString();
+    history.pushState({}, '', url);
+}
+
+async function applyURLState() {
+    const params = getURLParams();
+    const station = params.get('station');
+    const showId = params.get('show');
+    const playId = params.get('play');
+
+    if (station) {
+        stationSelect.value = station;
+        await loadShows(station);
+
+        if (showId) {
+            showSelect.value = showId;
+            await loadDownloads(showId);
+
+            if (playId) {
+                const download = state.downloads.find(d => d.ID == playId);
+                if (download) playDownload(download, false); // Don't update URL again
+            }
+        }
+    }
+}
+
 // DOM Elements
 const stationSelect = document.getElementById('station-select');
 const showSelect = document.getElementById('show-select');
@@ -28,6 +61,7 @@ const rightReel = document.querySelector('.right-reel');
 async function init() {
     await loadStations();
     setupEventListeners();
+    await applyURLState();
 }
 
 // API Functions
@@ -130,7 +164,7 @@ function renderDownloads() {
 }
 
 // Playback Functions
-function playDownload(download) {
+function playDownload(download, shouldUpdateURL = true) {
     state.currentDownload = download;
     audioPlayer.src = `/api/audio/${download.ID}`;
     audioPlayer.load();
@@ -140,6 +174,12 @@ function playDownload(download) {
     updatePlayButton();
     startReels();
     renderDownloads(); // Update active state
+
+    if (shouldUpdateURL) {
+        const params = getURLParams();
+        params.set('play', download.ID);
+        updateURL(params);
+    }
 }
 
 function updateNowPlaying() {
@@ -227,9 +267,15 @@ function setupEventListeners() {
         const callSign = e.target.value;
         if (callSign) {
             await loadShows(callSign);
+            // Update URL with station, remove show and play
+            const params = new URLSearchParams();
+            params.set('station', callSign);
+            updateURL(params);
         } else {
             state.shows = [];
             renderShows();
+            // Clear URL params
+            updateURL(new URLSearchParams());
         }
         state.downloads = [];
         tapeList.innerHTML = '<p class="empty-message">Select a show to view downloads</p>';
@@ -239,9 +285,20 @@ function setupEventListeners() {
         const showId = e.target.value;
         if (showId) {
             await loadDownloads(showId);
+            // Update URL with station and show, remove play
+            const params = new URLSearchParams();
+            const station = stationSelect.value;
+            if (station) params.set('station', station);
+            params.set('show', showId);
+            updateURL(params);
         } else {
             state.downloads = [];
             tapeList.innerHTML = '<p class="empty-message">Select a show to view downloads</p>';
+            // Keep only station in URL
+            const params = new URLSearchParams();
+            const station = stationSelect.value;
+            if (station) params.set('station', station);
+            updateURL(params);
         }
     });
 
@@ -284,6 +341,11 @@ function setupEventListeners() {
         if (audioPlayer.duration) {
             audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
         }
+    });
+
+    // Handle browser back/forward navigation
+    window.addEventListener('popstate', async () => {
+        await applyURLState();
     });
 }
 

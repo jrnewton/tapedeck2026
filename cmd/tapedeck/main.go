@@ -18,6 +18,30 @@ import (
 //go:embed web/*
 var webFiles embed.FS
 
+// spaHandler returns an HTTP handler that serves static files from the embedded
+// filesystem, falling back to index.html for paths that don't match a file.
+// This enables client-side routing for the single-page application.
+func spaHandler(webFS fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(webFS))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Try to serve the file directly
+		path := r.URL.Path
+		if path == "/" {
+			path = "/index.html"
+		}
+
+		// Check if file exists (strip leading slash for fs.Stat)
+		if _, err := fs.Stat(webFS, path[1:]); err == nil {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+
+		// Fallback to index.html for SPA routing
+		r.URL.Path = "/"
+		fileServer.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	port := os.Getenv("TAPEDECK_PORT")
 	if port == "" {
@@ -54,12 +78,12 @@ func main() {
 	mux := http.NewServeMux()
 	apiServer.RegisterRoutes(mux)
 
-	// Serve static files from embedded filesystem
+	// Serve static files from embedded filesystem with SPA fallback
 	webFS, err := fs.Sub(webFiles, "web")
 	if err != nil {
 		log.Fatalf("failed to create web filesystem: %v", err)
 	}
-	mux.Handle("/", http.FileServer(http.FS(webFS)))
+	mux.Handle("/", spaHandler(webFS))
 
 	log.Printf("Starting server on :%s", port)
 	log.Printf("Data directory: %s", dataDir)
