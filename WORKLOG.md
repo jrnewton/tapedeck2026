@@ -61,6 +61,7 @@ DONE: Implement "download to device" option in GUI that will save audio file in 
 DONE: Improve API caching for faster offline loading.
     - Cache-first strategy: return cached data immediately, refresh in background
     - Eliminates offline delay from waiting for network timeouts
+    - Auto-refresh UI: when background refresh detects new data, re-renders affected component
 DONE: Fix path handling for cross-context database compatibility.
     - Database now stores only filenames (e.g., WMBR_ShowName_20260124.mp3)
     - Full paths constructed at runtime using TAPEDECK_DATA_DIR
