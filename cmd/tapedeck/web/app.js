@@ -35,7 +35,7 @@ async function applyURLState() {
 
             if (playId) {
                 const download = state.downloads.find(d => d.ID == playId);
-                if (download) playDownload(download, false); // Don't update URL again
+                if (download) loadDownloadWithoutPlay(download); // Load but don't autoplay
             }
         }
     }
@@ -164,25 +164,28 @@ function renderDownloads() {
 }
 
 // Playback Functions
+
+// Load a download without playing - used when restoring from URL
+function loadDownloadWithoutPlay(download) {
+    state.currentDownload = download;
+    audioPlayer.src = `/api/audio/${download.ID}`;
+    audioPlayer.load();
+    state.isPlaying = false;
+    updateNowPlaying();
+    updatePlayButton();
+    renderDownloads(); // Update active state
+}
+
 function playDownload(download, shouldUpdateURL = true) {
     state.currentDownload = download;
     audioPlayer.src = `/api/audio/${download.ID}`;
     audioPlayer.load();
-
-    // Optimistically set playing state (will be corrected if autoplay is blocked)
+    audioPlayer.play();
     state.isPlaying = true;
     updateNowPlaying();
     updatePlayButton();
     startReels();
     renderDownloads(); // Update active state
-
-    audioPlayer.play().catch(error => {
-        // Autoplay was prevented by browser policy
-        console.log('Playback blocked:', error.message);
-        state.isPlaying = false;
-        updatePlayButton();
-        stopReels();
-    });
 
     if (shouldUpdateURL) {
         const params = getURLParams();
