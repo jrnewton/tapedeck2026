@@ -76,6 +76,12 @@ DONE: Review deployment requirements and deploy to DigitalOcean.
     - Docker bound to localhost:8080 (not exposed externally)
     - Live at: https://tapedeck.us
     - Deployment commands documented in README.md
+    - Added make deploy target for one-command deployment
+DONE: Fix iOS Safari audio playback.
+    - Set Content-Type: audio/mpeg for MP3 files (Alpine's mime detection fails)
+    - Bypass service worker for /api/audio/ requests (iOS redirect error)
+    - Added debug mode toggle (DBG button) for error alerts
+    - Improved IndexedDB error handling for offline storage
 TODO: adjust page title based on station/show/download.
 TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
 TODO: Adjust layout, move station down to be above show, put a blurb in upper right corner or link to "about"
