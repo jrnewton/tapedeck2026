@@ -33,7 +33,9 @@ DONE: Build frontend GUI that allow for download playback in browser
     - HTML5 audio player with Range request support for seeking
     - Fixed: shows dropdown only shows shows with downloads
     - Fixed: CLI uses TAPEDECK_DATA_DIR env var for consistent DB and downloads path
+    - Fixed: UTC timezone handling for date display in collection
     - Added: fix-downloads CLI command to repair unlinked downloads and relative paths
+    - Added: E2E browser tests using chromedp (run in Docker with Chromium)
 TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB
 TODO: Implement backend CLI for WOMR
