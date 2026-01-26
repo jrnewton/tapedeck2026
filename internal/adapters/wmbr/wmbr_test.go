@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jnewton/tapedeck/pkg/tapedeck"
+	"local/tapedeck/pkg/tapedeck"
 )
 
 const mockArchiveHTML = `<!DOCTYPE html>

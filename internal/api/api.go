@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/jnewton/tapedeck/internal/db"
+	"local/tapedeck/internal/db"
 )
 
 // Server holds API dependencies.

@@ -1,4 +1,4 @@
-module github.com/jnewton/tapedeck
+module local/tapedeck
 
 go 1.24.0
 

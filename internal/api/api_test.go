@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jnewton/tapedeck/internal/db"
+	"local/tapedeck/internal/db"
 )
 
 func setupTestServer(t *testing.T) (*Server, *db.DB) {
