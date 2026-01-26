@@ -67,7 +67,12 @@ DONE: Fix path handling for cross-context database compatibility.
     - Full paths constructed at runtime using TAPEDECK_DATA_DIR
     - Works across host CLI, Docker CLI, and Docker Web contexts
     - fix-downloads command migrates existing paths to filenames
-TODO: Review deployment requirements and begin planning hosting on cloudflare.
+DONE: Review deployment requirements and deploy to DigitalOcean.
+    - Evaluated Fly.io vs DigitalOcean (DO cheaper long-term)
+    - Created droplet: tapedeck (s-1vcpu-1gb, nyc1, $6/mo)
+    - Deployed Docker container with existing data (630MB, 7 shows)
+    - Live at: http://68.183.125.135:8080
+    - Deployment commands documented in README.md
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Implement "About" button
 TODO: Review all test cases and test coverage.
