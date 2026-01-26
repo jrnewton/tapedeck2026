@@ -76,7 +76,11 @@ DONE: Review deployment requirements and deploy to DigitalOcean.
     - Docker bound to localhost:8080 (not exposed externally)
     - Live at: https://tapedeck.us
     - Deployment commands documented in README.md
+TODO: adjust page title based on station/show/download.
 TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
+TODO: Adjust layout, move station down to be above show, put a blurb in upper right corner or link to "about"
+TODO: selected download is not decorated consistently on IOS.
+TOOD: Have a "share" button that copies URL to current playing song.
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Implement "About" button
 TODO: Review all test cases and test coverage.
