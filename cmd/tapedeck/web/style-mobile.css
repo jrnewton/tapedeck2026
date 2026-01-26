@@ -48,6 +48,12 @@ header h1 {
     text-shadow: 1px 1px 0 var(--orange);
 }
 
+header h1 a {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
 .header-station select {
     padding: 0.5rem 0.75rem;
     font-family: 'Audiowide', sans-serif;
@@ -134,7 +140,7 @@ main {
 }
 
 .tape-spine.active {
-    background: linear-gradient(90deg, var(--orange) 0%, var(--orange) 8px, var(--yellow) 8px);
+    background: linear-gradient(90deg, var(--red) 0%, var(--red) 8px, rgba(255,220,230,1) 8px);
 }
 
 .tape-spine .tape-info {
