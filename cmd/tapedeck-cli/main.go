@@ -421,7 +421,7 @@ func formatStatus(status string) string {
 	case db.StatusFailed:
 		return "failed"
 	default:
-		return status
+		panic(fmt.Sprintf("unknown status: %s", status))
 	}
 }
 
