@@ -89,11 +89,30 @@ async function loadOfflineIds() {
 
 // API Functions
 async function fetchJSON(url) {
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const cacheKey = `api-cache:${url}`;
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        // Cache successful response for offline use
+        try {
+            localStorage.setItem(cacheKey, JSON.stringify(data));
+        } catch (e) {
+            // localStorage might be full or unavailable
+        }
+        return data;
+    } catch (error) {
+        // Try to return cached data when offline
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+            console.log(`Using cached data for ${url}`);
+            return JSON.parse(cached);
+        }
+        throw error;
     }
-    return response.json();
 }
 
 async function loadStations() {
