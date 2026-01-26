@@ -85,7 +85,11 @@ DONE: Fix iOS Safari audio playback.
 DONE: Fix offline mode UI not updating on show change.
     - Render functions now called in catch blocks when API fetch fails
     - Previously showed stale data when changing shows while offline with uncached data
-TODO: adjust page title based on station/show/download.
+DONE: Adjust page title based on station/show/download.
+    - Title format: "Tapedeck - <context>" where context is station, show, or download
+    - Updates dynamically when selecting station, show, or playing a download
+    - Works with URL state restoration (direct links)
+TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
 TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
 TODO: Adjust layout, move station down to be above show, put a blurb in upper right corner or link to "about"
 TODO: selected download is not decorated consistently on IOS.

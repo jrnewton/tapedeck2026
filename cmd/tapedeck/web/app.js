@@ -19,6 +19,32 @@ function debugAlert(message) {
     }
 }
 
+// Update page title based on current state
+function updatePageTitle() {
+    const base = 'Tapedeck';
+
+    if (state.currentDownload) {
+        const d = state.currentDownload;
+        const date = new Date(d.ArchiveDate);
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        document.title = `${base} - ${d.Show} · ${dateStr}`;
+        return;
+    }
+
+    const showOption = showSelect.options[showSelect.selectedIndex];
+    if (showSelect.value && showOption) {
+        document.title = `${base} - ${showOption.textContent}`;
+        return;
+    }
+
+    if (stationSelect.value) {
+        document.title = `${base} - ${stationSelect.value}`;
+        return;
+    }
+
+    document.title = base;
+}
+
 // URL State Management
 function getURLParams() {
     return new URLSearchParams(window.location.search);
@@ -46,10 +72,11 @@ async function applyURLState() {
 
             if (playId) {
                 const download = state.downloads.find(d => d.ID == playId);
-                if (download) loadDownloadWithoutPlay(download); // Load but don't autoplay
+                if (download) await loadDownloadWithoutPlay(download); // Load but don't autoplay
             }
         }
     }
+    updatePageTitle();
 }
 
 // DOM Elements
@@ -378,6 +405,7 @@ async function loadDownloadWithoutPlay(download) {
     state.isPlaying = false;
     updateNowPlaying();
     updatePlayButton();
+    updatePageTitle();
     renderDownloads(); // Update active state
 }
 
@@ -397,6 +425,7 @@ async function playDownload(download, shouldUpdateURL = true) {
     state.isPlaying = true;
     updateNowPlaying();
     updatePlayButton();
+    updatePageTitle();
     startReels();
     renderDownloads(); // Update active state
 
@@ -520,7 +549,13 @@ function setupEventListeners() {
             updateURL(new URLSearchParams());
         }
         state.downloads = [];
-        tapeList.innerHTML = '<p class="empty-message">Select a show to view downloads</p>';
+        state.currentDownload = null;
+        tapeList.textContent = '';
+        const msg = document.createElement('p');
+        msg.className = 'empty-message';
+        msg.textContent = 'Select a show to view downloads';
+        tapeList.appendChild(msg);
+        updatePageTitle();
     });
 
     showSelect.addEventListener('change', async (e) => {
@@ -535,13 +570,19 @@ function setupEventListeners() {
             updateURL(params);
         } else {
             state.downloads = [];
-            tapeList.innerHTML = '<p class="empty-message">Select a show to view downloads</p>';
+            tapeList.textContent = '';
+            const msg = document.createElement('p');
+            msg.className = 'empty-message';
+            msg.textContent = 'Select a show to view downloads';
+            tapeList.appendChild(msg);
             // Keep only station in URL
             const params = new URLSearchParams();
             const station = stationSelect.value;
             if (station) params.set('station', station);
             updateURL(params);
         }
+        state.currentDownload = null;
+        updatePageTitle();
     });
 
     btnPlay.addEventListener('click', togglePlay);
