@@ -282,8 +282,8 @@ func cmdDownloadShow(args []string) error {
 		showID = &show.ID
 	}
 
-	// Check for existing download of same show/date
-	existing, err := database.FindDownload(station.ID, archive.Date)
+	// Check for existing download of same station/show/date
+	existing, err := database.FindDownload(station.ID, showID, archive.Date)
 	if err != nil {
 		return fmt.Errorf("check existing download: %w", err)
 	}

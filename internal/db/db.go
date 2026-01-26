@@ -649,23 +649,38 @@ func (db *DB) ListDownloadsByShowID(showID int64, status string) ([]Download, er
 	return db.queryDownloads(conn, query, args)
 }
 
-// FindDownload finds an existing download for a station and archive date.
-func (db *DB) FindDownload(stationID int64, archiveDate time.Time) (*Download, error) {
+// FindDownload finds an existing download for a station, show, and archive date.
+func (db *DB) FindDownload(stationID int64, showID *int64, archiveDate time.Time) (*Download, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	defer db.pool.Put(conn)
 
-	query := `
-		SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
-		       s.call_sign, COALESCE(sh.name, '')
-		FROM downloads d
-		JOIN stations s ON d.station_id = s.id
-		LEFT JOIN shows sh ON d.show_id = sh.id
-		WHERE d.station_id = ? AND d.archive_date = ?`
+	var query string
+	var args []any
 
-	downloads, err := db.queryDownloads(conn, query, []any{stationID, archiveDate.Format("2006-01-02")})
+	if showID != nil {
+		query = `
+			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+			       s.call_sign, COALESCE(sh.name, '')
+			FROM downloads d
+			JOIN stations s ON d.station_id = s.id
+			LEFT JOIN shows sh ON d.show_id = sh.id
+			WHERE d.station_id = ? AND d.show_id = ? AND d.archive_date = ?`
+		args = []any{stationID, *showID, archiveDate.Format("2006-01-02")}
+	} else {
+		query = `
+			SELECT d.id, d.station_id, d.show_id, d.archive_date, d.m3u_url, d.filepath, d.status, d.error, d.created_at, d.updated_at,
+			       s.call_sign, COALESCE(sh.name, '')
+			FROM downloads d
+			JOIN stations s ON d.station_id = s.id
+			LEFT JOIN shows sh ON d.show_id = sh.id
+			WHERE d.station_id = ? AND d.show_id IS NULL AND d.archive_date = ?`
+		args = []any{stationID, archiveDate.Format("2006-01-02")}
+	}
+
+	downloads, err := db.queryDownloads(conn, query, args)
 	if err != nil {
 		return nil, err
 	}

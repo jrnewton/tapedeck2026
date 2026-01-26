@@ -519,7 +519,7 @@ func TestFindDownload(t *testing.T) {
 	archiveDate := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
 
 	// No download exists yet
-	found, err := db.FindDownload(station.ID, archiveDate)
+	found, err := db.FindDownload(station.ID, &show.ID, archiveDate)
 	if err != nil {
 		t.Fatalf("failed to find download: %v", err)
 	}
@@ -536,7 +536,7 @@ func TestFindDownload(t *testing.T) {
 	})
 
 	// Now it should be found
-	found, err = db.FindDownload(station.ID, archiveDate)
+	found, err = db.FindDownload(station.ID, &show.ID, archiveDate)
 	if err != nil {
 		t.Fatalf("failed to find download: %v", err)
 	}
@@ -545,6 +545,111 @@ func TestFindDownload(t *testing.T) {
 	}
 	if found.StationID != station.ID {
 		t.Errorf("expected station ID %d, got %d", station.ID, found.StationID)
+	}
+}
+
+func TestFindDownload_DifferentShowsSameDate(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Backwoods", "Aural Fixation"})
+	show1, _ := db.GetShowByName(station.ID, "Backwoods")
+	show2, _ := db.GetShowByName(station.ID, "Aural Fixation")
+
+	archiveDate := time.Date(2026, 1, 24, 0, 0, 0, 0, time.UTC)
+
+	// Insert download for show1 (Backwoods)
+	db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      &show1.ID,
+		ArchiveDate: archiveDate,
+		M3UURL:      "http://test1.m3u",
+		Status:      StatusCompleted,
+	})
+
+	// Searching for show1 should find it
+	found, err := db.FindDownload(station.ID, &show1.ID, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find download for show1")
+	}
+	if found.Show != "Backwoods" {
+		t.Errorf("expected show name 'Backwoods', got '%s'", found.Show)
+	}
+
+	// Searching for show2 (Aural Fixation) should NOT find it
+	found, err = db.FindDownload(station.ID, &show2.ID, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found != nil {
+		t.Error("expected nil for show2, but found existing download - this was the bug!")
+	}
+
+	// Now insert download for show2
+	db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      &show2.ID,
+		ArchiveDate: archiveDate,
+		M3UURL:      "http://test2.m3u",
+		Status:      StatusPending,
+	})
+
+	// Now searching for show2 should find it
+	found, err = db.FindDownload(station.ID, &show2.ID, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find download for show2")
+	}
+	if found.Show != "Aural Fixation" {
+		t.Errorf("expected show name 'Aural Fixation', got '%s'", found.Show)
+	}
+}
+
+func TestFindDownload_NilShowID(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	archiveDate := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+
+	// Insert download with nil ShowID (legacy record)
+	db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      nil,
+		ArchiveDate: archiveDate,
+		M3UURL:      "http://test.m3u",
+	})
+
+	// Searching with nil showID should find it
+	found, err := db.FindDownload(station.ID, nil, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find download with nil showID")
+	}
+
+	// Searching with a specific showID should NOT find the nil record
+	db.CacheShows(station.ID, []string{"SomeShow"})
+	show, _ := db.GetShowByName(station.ID, "SomeShow")
+	found, err = db.FindDownload(station.ID, &show.ID, archiveDate)
+	if err != nil {
+		t.Fatalf("failed to find download: %v", err)
+	}
+	if found != nil {
+		t.Error("expected nil when searching for specific show but only nil-show record exists")
 	}
 }
 
