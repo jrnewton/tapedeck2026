@@ -65,6 +65,23 @@ header h1 a {
     min-width: 100px;
 }
 
+.debug-toggle {
+    padding: 0.3rem 0.5rem;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 0.6rem;
+    background-color: var(--light-grey);
+    color: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.debug-toggle.active {
+    background-color: var(--red);
+    opacity: 1;
+}
+
 /* Show Selector - Full Width Below Header */
 .show-selector {
     background-color: var(--blue);

@@ -1,7 +1,7 @@
 // Tapedeck Service Worker
 // Provides offline app shell caching for PWA experience
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v8';
 const CACHE_NAME = `tapedeck-${CACHE_VERSION}`;
 
 // App shell files to cache for offline use
@@ -46,7 +46,12 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // API calls: network-first (don't cache)
+    // Audio API: don't intercept at all (iOS Safari has issues with SW-served audio)
+    if (url.pathname.startsWith('/api/audio/')) {
+        return;
+    }
+
+    // Other API calls: network-first (don't cache)
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(
             fetch(event.request).catch(() => {

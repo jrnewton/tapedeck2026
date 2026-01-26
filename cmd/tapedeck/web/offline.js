@@ -38,6 +38,15 @@ async function saveAudio(downloadId, metadata, blob) {
     const database = await openDB();
     return new Promise((resolve, reject) => {
         const transaction = database.transaction([STORE_NAME], 'readwrite');
+
+        transaction.onerror = () => {
+            reject(new Error('Transaction failed: ' + (transaction.error?.message || 'unknown')));
+        };
+
+        transaction.onabort = () => {
+            reject(new Error('Transaction aborted: ' + (transaction.error?.message || 'quota exceeded?')));
+        };
+
         const store = transaction.objectStore(STORE_NAME);
 
         const record = {
@@ -48,7 +57,7 @@ async function saveAudio(downloadId, metadata, blob) {
         };
 
         const request = store.put(record);
-        request.onerror = () => reject(request.error);
+        request.onerror = () => reject(new Error('Put failed: ' + (request.error?.message || 'unknown')));
         request.onsuccess = () => resolve();
     });
 }

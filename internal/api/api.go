@@ -183,6 +183,11 @@ func (s *Server) handleStreamAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Set correct MIME type for MP3 files (Go's mime detection may not work on Alpine)
+	if strings.HasSuffix(strings.ToLower(absPath), ".mp3") {
+		w.Header().Set("Content-Type", "audio/mpeg")
+	}
+
 	// Serve file with Range support
 	http.ServeFile(w, r, absPath)
 }

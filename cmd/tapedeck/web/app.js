@@ -7,8 +7,17 @@ const state = {
     currentDownload: null,
     isPlaying: false,
     offlineIds: new Set(),      // tracks which downloads are saved offline
-    downloadingIds: new Set()   // tracks downloads in progress
+    downloadingIds: new Set(),  // tracks downloads in progress
+    debugMode: localStorage.getItem('debugMode') === 'true'
 };
+
+// Debug helper - only shows alerts when debug mode is enabled
+function debugAlert(message) {
+    console.log('[DEBUG]', message);
+    if (state.debugMode) {
+        alert(message);
+    }
+}
 
 // URL State Management
 function getURLParams() {
@@ -312,10 +321,13 @@ async function saveForOffline(download) {
     try {
         const response = await fetch(`/api/audio/${download.ID}`);
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(`Fetch failed: HTTP ${response.status}`);
         }
 
         const blob = await response.blob();
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        console.log(`Downloaded ${sizeMB}MB blob for ID ${download.ID}`);
+
         const metadata = {
             station: download.Station,
             show: download.Show,
@@ -324,8 +336,10 @@ async function saveForOffline(download) {
 
         await window.offlineStorage.saveAudio(download.ID, metadata, blob);
         state.offlineIds.add(download.ID);
+        console.log(`Saved to IndexedDB: ID ${download.ID}`);
     } catch (error) {
         console.error('Failed to save audio offline:', error);
+        debugAlert('Download failed: ' + error.message);
     } finally {
         state.downloadingIds.delete(download.ID);
         renderDownloads();
@@ -338,12 +352,16 @@ async function getAudioSource(download) {
         try {
             const record = await window.offlineStorage.getAudio(download.ID);
             if (record && record.blob) {
-                return URL.createObjectURL(record.blob);
+                const blobUrl = URL.createObjectURL(record.blob);
+                console.log('Playing from offline storage:', blobUrl);
+                return blobUrl;
             }
+            console.warn('Offline record found but no blob for ID:', download.ID);
         } catch (error) {
             console.warn('Failed to load offline audio, falling back to network:', error);
         }
     }
+    console.log('Playing from network:', `/api/audio/${download.ID}`);
     return `/api/audio/${download.ID}`;
 }
 
@@ -362,9 +380,17 @@ async function loadDownloadWithoutPlay(download) {
 
 async function playDownload(download, shouldUpdateURL = true) {
     state.currentDownload = download;
-    audioPlayer.src = await getAudioSource(download);
+    const src = await getAudioSource(download);
+    const isOffline = src.startsWith('blob:');
+    audioPlayer.src = src;
     audioPlayer.load();
-    audioPlayer.play();
+    try {
+        await audioPlayer.play();
+    } catch (error) {
+        console.error('Playback failed:', error.name, error.message);
+        const mode = isOffline ? 'offline blob' : 'network';
+        debugAlert(`Playback failed (${mode}): ${error.message}`);
+    }
     state.isPlaying = true;
     updateNowPlaying();
     updatePlayButton();
@@ -395,7 +421,7 @@ function updatePlayButton() {
     icon.innerHTML = state.isPlaying ? '&#9616;&#9616;' : '&#9654;';
 }
 
-function togglePlay() {
+async function togglePlay() {
     if (!state.currentDownload) {
         // If no download selected, play first one
         if (state.downloads.length > 0) {
@@ -409,9 +435,14 @@ function togglePlay() {
         state.isPlaying = false;
         stopReels();
     } else {
-        audioPlayer.play();
-        state.isPlaying = true;
-        startReels();
+        try {
+            await audioPlayer.play();
+            state.isPlaying = true;
+            startReels();
+        } catch (error) {
+            console.error('Playback failed:', error.name, error.message);
+            debugAlert('Playback failed: ' + error.message);
+        }
     }
     updatePlayButton();
 }
@@ -459,6 +490,18 @@ function formatTime(seconds) {
 
 // Event Listeners
 function setupEventListeners() {
+    // Debug toggle
+    const debugToggle = document.getElementById('debug-toggle');
+    if (state.debugMode) {
+        debugToggle.classList.add('active');
+    }
+    debugToggle.addEventListener('click', () => {
+        state.debugMode = !state.debugMode;
+        localStorage.setItem('debugMode', state.debugMode);
+        debugToggle.classList.toggle('active', state.debugMode);
+        alert('Debug mode: ' + (state.debugMode ? 'ON' : 'OFF'));
+    });
+
     stationSelect.addEventListener('change', async (e) => {
         const callSign = e.target.value;
         if (callSign) {
@@ -511,6 +554,12 @@ function setupEventListeners() {
 
     audioPlayer.addEventListener('loadedmetadata', () => {
         timeTotal.textContent = formatTime(audioPlayer.duration);
+    });
+
+    audioPlayer.addEventListener('error', (e) => {
+        const error = audioPlayer.error;
+        console.error('Audio error:', error?.code, error?.message);
+        debugAlert('Audio error: ' + (error?.message || 'Unknown error'));
     });
 
     audioPlayer.addEventListener('ended', () => {
