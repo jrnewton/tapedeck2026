@@ -11,9 +11,27 @@ const state = {
     debugMode: localStorage.getItem('debugMode') === 'true'
 };
 
-// Debug helper - only shows alerts when debug mode is enabled
+// Debug helpers - only log/alert when debug mode is enabled
+function debugLog(...args) {
+    if (state.debugMode) {
+        console.log('[DEBUG]', ...args);
+    }
+}
+
+function debugWarn(...args) {
+    if (state.debugMode) {
+        console.warn('[DEBUG]', ...args);
+    }
+}
+
+function debugError(...args) {
+    if (state.debugMode) {
+        console.error('[DEBUG]', ...args);
+    }
+}
+
 function debugAlert(message) {
-    console.log('[DEBUG]', message);
+    debugLog(message);
     if (state.debugMode) {
         alert(message);
     }
@@ -100,7 +118,7 @@ async function init() {
     // Register service worker for offline app shell
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch((error) => {
-            console.warn('Service worker registration failed:', error);
+            debugWarn('Service worker registration failed:', error);
         });
     }
 
@@ -118,7 +136,7 @@ async function loadOfflineIds() {
         const ids = await window.offlineStorage.listOfflineIds();
         state.offlineIds = new Set(ids);
     } catch (error) {
-        console.warn('Failed to load offline IDs:', error);
+        debugWarn('Failed to load offline IDs:', error);
         state.offlineIds = new Set();
     }
 }
@@ -209,7 +227,7 @@ async function loadStations() {
         state.stations = await fetchJSON('/api/stations');
         renderStations();
     } catch (error) {
-        console.error('Failed to load stations:', error);
+        debugError('Failed to load stations:', error);
         state.stations = [];
         renderStations();
     }
@@ -220,7 +238,7 @@ async function loadShows(callSign) {
         state.shows = await fetchJSON(`/api/stations/${callSign}/shows`);
         renderShows();
     } catch (error) {
-        console.error('Failed to load shows:', error);
+        debugError('Failed to load shows:', error);
         state.shows = [];
         renderShows();
     }
@@ -231,7 +249,7 @@ async function loadDownloads(showId) {
         state.downloads = await fetchJSON(`/api/shows/${showId}/downloads?status=completed`);
         renderDownloads();
     } catch (error) {
-        console.error('Failed to load downloads:', error);
+        debugError('Failed to load downloads:', error);
         state.downloads = [];
         renderDownloads();
     }
@@ -335,7 +353,7 @@ async function toggleOffline(download) {
             state.offlineIds.delete(download.ID);
             renderDownloads();
         } catch (error) {
-            console.error('Failed to remove offline audio:', error);
+            debugError('Failed to remove offline audio:', error);
         }
     } else {
         // Save for offline
@@ -356,7 +374,7 @@ async function saveForOffline(download) {
 
         const blob = await response.blob();
         const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
-        console.log(`Downloaded ${sizeMB}MB blob for ID ${download.ID}`);
+        debugLog(`Downloaded ${sizeMB}MB blob for ID ${download.ID}`);
 
         const metadata = {
             station: download.Station,
@@ -366,9 +384,9 @@ async function saveForOffline(download) {
 
         await window.offlineStorage.saveAudio(download.ID, metadata, blob);
         state.offlineIds.add(download.ID);
-        console.log(`Saved to IndexedDB: ID ${download.ID}`);
+        debugLog(`Saved to IndexedDB: ID ${download.ID}`);
     } catch (error) {
-        console.error('Failed to save audio offline:', error);
+        debugError('Failed to save audio offline:', error);
         debugAlert('Download failed: ' + error.message);
     } finally {
         state.downloadingIds.delete(download.ID);
@@ -383,15 +401,15 @@ async function getAudioSource(download) {
             const record = await window.offlineStorage.getAudio(download.ID);
             if (record && record.blob) {
                 const blobUrl = URL.createObjectURL(record.blob);
-                console.log('Playing from offline storage:', blobUrl);
+                debugLog('Playing from offline storage:', blobUrl);
                 return blobUrl;
             }
-            console.warn('Offline record found but no blob for ID:', download.ID);
+            debugWarn('Offline record found but no blob for ID:', download.ID);
         } catch (error) {
-            console.warn('Failed to load offline audio, falling back to network:', error);
+            debugWarn('Failed to load offline audio, falling back to network:', error);
         }
     }
-    console.log('Playing from network:', `/api/audio/${download.ID}`);
+    debugLog('Playing from network:', `/api/audio/${download.ID}`);
     return `/api/audio/${download.ID}`;
 }
 
@@ -418,7 +436,7 @@ async function playDownload(download, shouldUpdateURL = true) {
     try {
         await audioPlayer.play();
     } catch (error) {
-        console.error('Playback failed:', error.name, error.message);
+        debugError('Playback failed:', error.name, error.message);
         const mode = isOffline ? 'offline blob' : 'network';
         debugAlert(`Playback failed (${mode}): ${error.message}`);
     }
@@ -472,7 +490,7 @@ async function togglePlay() {
             state.isPlaying = true;
             startReels();
         } catch (error) {
-            console.error('Playback failed:', error.name, error.message);
+            debugError('Playback failed:', error.name, error.message);
             debugAlert('Playback failed: ' + error.message);
         }
     }
@@ -602,7 +620,7 @@ function setupEventListeners() {
 
     audioPlayer.addEventListener('error', (e) => {
         const error = audioPlayer.error;
-        console.error('Audio error:', error?.code, error?.message);
+        debugError('Audio error:', error?.code, error?.message);
         debugAlert('Audio error: ' + (error?.message || 'Unknown error'));
     });
 

@@ -35,6 +35,15 @@ Use `make` for common tasks:
 - `make test-e2e` - Run E2E tests (requires Docker with Chromium)
 - `make clean` - Remove build artifacts
 
+# Frontend Debugging
+All console output (log, warn, error) and alerts in app.js must be controlled by the debug mode toggle (DBG button). Use these helper functions instead of console.* directly:
+- `debugLog(...args)` - for info-level logging
+- `debugWarn(...args)` - for warning-level logging
+- `debugError(...args)` - for error-level logging
+- `debugAlert(message)` - for user-visible alerts (also logs)
+
+Debug mode is toggled via the DBG button in the UI and persisted in localStorage.
+
 # Offline/PWA Versioning
 The app uses two separate version numbers for offline functionality:
 
