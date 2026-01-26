@@ -88,31 +88,49 @@ async function loadOfflineIds() {
 }
 
 // API Functions
+
+// Cache-first: return cached data immediately, refresh in background
 async function fetchJSON(url) {
     const cacheKey = `api-cache:${url}`;
+    const cached = localStorage.getItem(cacheKey);
 
+    // Cache-first: return cached data immediately if available
+    if (cached) {
+        // Refresh cache in background (don't await)
+        refreshCache(url, cacheKey);
+        return JSON.parse(cached);
+    }
+
+    // No cache: must fetch from network
+    return fetchAndCache(url, cacheKey);
+}
+
+// Background refresh - silently update cache
+async function refreshCache(url, cacheKey) {
     try {
         const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        const data = await response.json();
-        // Cache successful response for offline use
-        try {
+        if (response.ok) {
+            const data = await response.json();
             localStorage.setItem(cacheKey, JSON.stringify(data));
-        } catch (e) {
-            // localStorage might be full or unavailable
         }
-        return data;
-    } catch (error) {
-        // Try to return cached data when offline
-        const cached = localStorage.getItem(cacheKey);
-        if (cached) {
-            console.log(`Using cached data for ${url}`);
-            return JSON.parse(cached);
-        }
-        throw error;
+    } catch (e) {
+        // Silently fail - we already returned cached data
     }
+}
+
+// Fetch from network and cache the result
+async function fetchAndCache(url, cacheKey) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const data = await response.json();
+    try {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch (e) {
+        // localStorage might be full
+    }
+    return data;
 }
 
 async function loadStations() {
