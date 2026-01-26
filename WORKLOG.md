@@ -24,13 +24,17 @@ DONE: Implement cron scheduler to download specific show archives each week
       - Handles late-night rollover (e.g., 23:00 -> 01:30 next day)
       - Confidence levels based on schedule consistency
       - Includes ready-to-run crontab install command
-DONE: Build frontend GUI that allow for download playback in browser
+PROG: Build frontend GUI that allow for download playback in browser
     - You select a station and a show (which has downloads) and then
       get a UI which plays the saved audio file on disk.
     - REST API: /api/stations, /api/stations/:call/shows, /api/downloads,
       /api/downloads/:id, /api/shows/:id/downloads, /api/audio/:id
     - Retro cassette tape design with spinning reels
     - HTML5 audio player with Range request support for seeking
+    - Fixed: shows dropdown only shows shows with downloads
+    - Fixed: CLI uses TAPEDECK_DATA_DIR env var for consistent DB access
+    - Added: fix-downloads CLI command to repair unlinked downloads
+    - TODO: test audio playback
 TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB
 TODO: Implement backend CLI for WOMR
