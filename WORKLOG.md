@@ -58,6 +58,9 @@ DONE: Implement "download to device" option in GUI that will save audio file in 
     - Download button on each tape spine with states: download arrow, spinner, checkmark (saved)
     - Offline-first playback: checks IndexedDB before fetching from network
     - Cache versioning: increment CACHE_VERSION in sw.js when deploying code changes
+DONE: Improve API caching for faster offline loading.
+    - Cache-first strategy: return cached data immediately, refresh in background
+    - Eliminates offline delay from waiting for network timeouts
 TODO: Review deployment requirements and begin planning hosting on cloudflare.
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Implement "About" button
