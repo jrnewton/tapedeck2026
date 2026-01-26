@@ -1,6 +1,6 @@
 # Runtime data
 data/
 
-# Binaries (root level only)
+# Binaries
 /tapedeck
 /tapedeck-cli
