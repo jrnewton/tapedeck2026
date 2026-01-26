@@ -16,6 +16,7 @@ TODO: implement backend
 
 # Design
 See DESIGN.md for living document of the project's technical design.
+The target OS and architecture is a docker container running under a Linux host system.
 
 # Git
 You are working in a Git repository.  Pls commit after each iteration is done and tested.
