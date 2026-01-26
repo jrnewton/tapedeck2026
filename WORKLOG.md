@@ -44,13 +44,14 @@ DONE: Adjust GUI design so UI choice are saved in URL
     - Track loads without autoplay when restoring from URL (avoids browser policy issues)
     - E2E tests for URL state updates and restoration
 DONE: Adjust GUI design for mobile-first.
-    - Created index-mobile.html with mobile-optimized layout
-    - Created style-mobile.css with touch-friendly styles (44px min targets)
-    - Created app-mobile.js (copy of app.js with minor display tweaks)
+    - Replaced desktop UI with mobile-first design as default
     - Layout: compact header with station selector, full-width show dropdown,
       scrollable tape collection as main focus, sticky mini-player at bottom
-    - Access via: http://localhost:8080/index-mobile.html
-    - Tested on iPhone 12 Pro viewport (390x844)
+    - Touch-friendly styles (44px min touch targets)
+    - Subtle light pink highlight for selected tape spine (red/white base)
+    - TAPEDECK header links to "/" for navigation
+    - Removed redundant play button from tape spines
+    - Optimized for iPhone 12 Pro viewport (390x844)
 TODO: Implement "download to device" option in GUI that will save audio file in browser local storage for offline listening.
 TODO: Review all test cases and test coverage.
 TODO: Change scheduler implementation so user can schedule via GUI.
