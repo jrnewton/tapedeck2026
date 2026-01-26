@@ -36,6 +36,15 @@ DONE: Build frontend GUI that allow for download playback in browser
     - Fixed: UTC timezone handling for date display in collection
     - Added: fix-downloads CLI command to repair unlinked downloads and relative paths
     - Added: E2E browser tests using chromedp (run in Docker with Chromium)
+TODO: Adjust GUI design so UI choice are saved in URL 
+    - selecting a station should provide a link for that specific UI
+    - selecting a show should provide a link for that specific UI 
+    - selecting a collection/download of the show should provide a link for that etc,
+    - these links are shareble with others.
+    - Let's review the different designs possible.
+TODO: Adjust GUI design for mobile-first.
+TODO: Change scheduler implementation so user can schedule via GUI.
+TODO: Review deployment requirements and begin planning hosting on cloudflare.
 TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB
 TODO: Implement backend CLI for WOMR
