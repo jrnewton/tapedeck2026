@@ -1,4 +1,16 @@
-.PHONY: build run stop test test-e2e clean logs
+.PHONY: help build run stop test test-e2e clean logs
+
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  build     Build tapedeck and tapedeck-cli binaries"
+	@echo "  run       Run server via Docker Compose (port 8080)"
+	@echo "  stop      Stop server"
+	@echo "  logs      View server logs"
+	@echo "  test      Run unit tests"
+	@echo "  test-e2e  Run E2E tests (requires Docker)"
+	@echo "  clean     Remove build artifacts"
 
 # Build the server binary
 build:
