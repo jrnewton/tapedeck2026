@@ -53,10 +53,10 @@ DONE: Adjust GUI design for mobile-first.
     - Removed redundant play button from tape spines
     - Optimized for iPhone 12 Pro viewport (390x844)
 TODO: Implement "download to device" option in GUI that will save audio file in browser local storage for offline listening.
+TODO: Review deployment requirements and begin planning hosting on cloudflare.
 TODO: Implement "About" button
 TODO: Review all test cases and test coverage.
 TODO: Change scheduler implementation so user can schedule via GUI.
-TODO: Review deployment requirements and begin planning hosting on cloudflare.
 TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB
 TODO: Implement backend CLI for WOMR
