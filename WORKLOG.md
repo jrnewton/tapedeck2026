@@ -82,6 +82,9 @@ DONE: Fix iOS Safari audio playback.
     - Bypass service worker for /api/audio/ requests (iOS redirect error)
     - Added debug mode toggle (DBG button) for error alerts
     - Improved IndexedDB error handling for offline storage
+DONE: Fix offline mode UI not updating on show change.
+    - Render functions now called in catch blocks when API fetch fails
+    - Previously showed stale data when changing shows while offline with uncached data
 TODO: adjust page title based on station/show/download.
 TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
 TODO: Adjust layout, move station down to be above show, put a blurb in upper right corner or link to "about"
