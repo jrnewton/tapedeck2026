@@ -82,7 +82,24 @@ func TestListShows(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1", "Show2"})
+	database.CacheShows(station.ID, []string{"Show1", "Show2", "Show3"})
+	show1, _ := database.GetShowByName(station.ID, "Show1")
+	show2, _ := database.GetShowByName(station.ID, "Show2")
+	// Show3 has no downloads, so it should not appear
+
+	// Add downloads for Show1 and Show2
+	database.InsertDownload(&db.Download{
+		StationID:   station.ID,
+		ShowID:      &show1.ID,
+		ArchiveDate: time.Now(),
+		M3UURL:      "http://1.m3u",
+	})
+	database.InsertDownload(&db.Download{
+		StationID:   station.ID,
+		ShowID:      &show2.ID,
+		ArchiveDate: time.Now(),
+		M3UURL:      "http://2.m3u",
+	})
 
 	mux := http.NewServeMux()
 	server.RegisterRoutes(mux)
@@ -100,8 +117,9 @@ func TestListShows(t *testing.T) {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
+	// Only shows with downloads should be returned
 	if len(shows) != 2 {
-		t.Errorf("expected 2 shows, got %d", len(shows))
+		t.Errorf("expected 2 shows with downloads, got %d", len(shows))
 	}
 }
 

@@ -10,6 +10,9 @@ import (
 
 	"github.com/jnewton/tapedeck/internal/api"
 	"github.com/jnewton/tapedeck/internal/db"
+
+	// Register adapters
+	_ "github.com/jnewton/tapedeck/internal/adapters/wmbr"
 )
 
 //go:embed web/*

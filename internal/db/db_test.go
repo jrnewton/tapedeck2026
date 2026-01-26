@@ -548,6 +548,40 @@ func TestFindDownload(t *testing.T) {
 	}
 }
 
+func TestListShowsWithDownloads(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show1", "Show2", "Show3"})
+	show1, _ := db.GetShowByName(station.ID, "Show1")
+	show2, _ := db.GetShowByName(station.ID, "Show2")
+	// show3 has no downloads
+
+	// Add downloads only for show1 and show2
+	db.InsertDownload(&Download{StationID: station.ID, ShowID: &show1.ID, ArchiveDate: time.Now(), M3UURL: "http://1.m3u"})
+	db.InsertDownload(&Download{StationID: station.ID, ShowID: &show2.ID, ArchiveDate: time.Now(), M3UURL: "http://2.m3u"})
+
+	shows, err := db.ListShowsWithDownloads(station.ID)
+	if err != nil {
+		t.Fatalf("failed to list shows: %v", err)
+	}
+
+	if len(shows) != 2 {
+		t.Errorf("expected 2 shows with downloads, got %d", len(shows))
+	}
+
+	// Verify show3 is not in the list
+	for _, s := range shows {
+		if s.Name == "Show3" {
+			t.Error("Show3 should not be in the list (no downloads)")
+		}
+	}
+}
+
 func TestListDownloadsByShowID(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {

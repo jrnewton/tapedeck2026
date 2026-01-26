@@ -289,6 +289,36 @@ func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 	return shows, valid, nil
 }
 
+// ListShowsWithDownloads returns shows for a station that have at least one download.
+func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	var shows []Show
+	err = sqlitex.Execute(conn, `
+		SELECT DISTINCT s.id, s.station_id, s.name, s.cached_at
+		FROM shows s
+		INNER JOIN downloads d ON d.show_id = s.id
+		WHERE s.station_id = ?
+		ORDER BY s.name`, &sqlitex.ExecOptions{
+		Args: []any{stationID},
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
+			shows = append(shows, Show{
+				ID:        stmt.ColumnInt64(0),
+				StationID: stmt.ColumnInt64(1),
+				Name:      stmt.ColumnText(2),
+				CachedAt:  cachedAt,
+			})
+			return nil
+		},
+	})
+	return shows, err
+}
+
 // CacheShows caches shows for a station, clearing old entries first.
 func (db *DB) CacheShows(stationID int64, showNames []string) error {
 	conn, err := db.pool.Take(context.Background())

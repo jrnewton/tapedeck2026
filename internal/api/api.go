@@ -46,21 +46,23 @@ func (s *Server) handleListStations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, stations)
 }
 
-// handleListShows returns shows for a station.
+// handleListShows returns shows for a station that have at least one download.
 func (s *Server) handleListShows(w http.ResponseWriter, r *http.Request) {
-	callSign := r.PathValue("call")
+	callSign := strings.ToUpper(r.PathValue("call"))
 	if callSign == "" {
 		http.Error(w, "station call sign required", http.StatusBadRequest)
 		return
 	}
 
+	// Get station
 	station, err := s.DB.GetStation(callSign)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
-	shows, _, err := s.DB.GetCachedShows(station.ID)
+	// Return only shows that have downloads
+	shows, err := s.DB.ListShowsWithDownloads(station.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
