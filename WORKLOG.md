@@ -43,6 +43,7 @@ TODO: Adjust GUI design so UI choice are saved in URL
     - these links are shareble with others.
     - Let's review the different designs possible.
 TODO: Adjust GUI design for mobile-first.
+TODO: Implement "download to device" option in GUI that will save audio file in browser local storage for offline listening.
 TODO: Review all test cases and test coverage.
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Review deployment requirements and begin planning hosting on cloudflare.
