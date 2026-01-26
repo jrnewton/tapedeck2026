@@ -155,7 +155,6 @@ function renderDownloads() {
                 <div class="tape-date">${dateStr}</div>
                 <div class="tape-show">${download.Station} - ${download.Show}</div>
             </div>
-            <button class="tape-play-btn" title="Play">&#9654;</button>
         `;
 
         spine.addEventListener('click', () => playDownload(download));
