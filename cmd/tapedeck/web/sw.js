@@ -41,6 +41,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
+    // Only handle same-origin requests
+    if (url.origin !== location.origin) {
+        return;
+    }
+
     // API calls: network-first (don't cache)
     if (url.pathname.startsWith('/api/')) {
         event.respondWith(
@@ -56,23 +61,49 @@ self.addEventListener('fetch', (event) => {
 
     // App shell: cache-first, then network
     event.respondWith(
-        caches.match(event.request)
+        caches.match(event.request, { ignoreSearch: true })
             .then((cachedResponse) => {
                 if (cachedResponse) {
                     return cachedResponse;
                 }
-                return fetch(event.request).then((response) => {
-                    // Don't cache non-GET requests or failed responses
-                    if (event.request.method !== 'GET' || !response.ok) {
-                        return response;
-                    }
-                    // Cache successful responses for app shell files
-                    const responseToCache = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
+
+                // For navigation requests, also try index.html
+                if (event.request.mode === 'navigate') {
+                    return caches.match('/index.html').then((indexResponse) => {
+                        if (indexResponse) {
+                            return indexResponse;
+                        }
+                        return fetchAndCache(event.request);
                     });
-                    return response;
-                });
+                }
+
+                return fetchAndCache(event.request);
+            })
+            .catch(() => {
+                // Last resort: try to serve index.html for navigation
+                if (event.request.mode === 'navigate') {
+                    return caches.match('/index.html');
+                }
+                return new Response('Offline', { status: 503 });
             })
     );
 });
+
+// Helper to fetch and cache response
+function fetchAndCache(request) {
+    return fetch(request)
+        .then((response) => {
+            // Don't cache non-GET or failed responses
+            if (request.method !== 'GET' || !response.ok) {
+                return response;
+            }
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, responseToCache);
+            });
+            return response;
+        })
+        .catch(() => {
+            return new Response('Offline', { status: 503 });
+        });
+}
