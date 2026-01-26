@@ -76,6 +76,7 @@ DONE: Review deployment requirements and deploy to DigitalOcean.
     - Docker bound to localhost:8080 (not exposed externally)
     - Live at: https://tapedeck.us
     - Deployment commands documented in README.md
+TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Implement "About" button
 TODO: Review all test cases and test coverage.
