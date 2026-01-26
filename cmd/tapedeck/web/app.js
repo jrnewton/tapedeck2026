@@ -5,7 +5,9 @@ const state = {
     shows: [],
     downloads: [],
     currentDownload: null,
-    isPlaying: false
+    isPlaying: false,
+    offlineIds: new Set(),      // tracks which downloads are saved offline
+    downloadingIds: new Set()   // tracks downloads in progress
 };
 
 // URL State Management
@@ -59,9 +61,30 @@ const rightReel = document.querySelector('.right-reel');
 
 // Initialize
 async function init() {
+    // Register service worker for offline app shell
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch((error) => {
+            console.warn('Service worker registration failed:', error);
+        });
+    }
+
+    // Load offline IDs from IndexedDB
+    await loadOfflineIds();
+
     await loadStations();
     setupEventListeners();
     await applyURLState();
+}
+
+// Load offline download IDs from IndexedDB
+async function loadOfflineIds() {
+    try {
+        const ids = await window.offlineStorage.listOfflineIds();
+        state.offlineIds = new Set(ids);
+    } catch (error) {
+        console.warn('Failed to load offline IDs:', error);
+        state.offlineIds = new Set();
+    }
 }
 
 // API Functions
@@ -150,24 +173,114 @@ function renderDownloads() {
             timeZone: 'UTC'
         });
 
+        // Determine offline button state
+        const isOffline = state.offlineIds.has(download.ID);
+        const isDownloading = state.downloadingIds.has(download.ID);
+        let btnClass = 'offline-btn';
+        let btnContent = '\u2193'; // Down arrow
+        if (isDownloading) {
+            btnClass += ' downloading';
+            btnContent = ''; // Spinner via CSS
+        } else if (isOffline) {
+            btnClass += ' saved';
+            btnContent = '\u2713'; // Checkmark
+        }
+
         spine.innerHTML = `
             <div class="tape-info">
                 <div class="tape-date">${dateStr}</div>
                 <div class="tape-show">${download.Station} - ${download.Show}</div>
             </div>
+            <button class="${btnClass}" title="${isOffline ? 'Remove from device' : 'Save to device'}">${btnContent}</button>
         `;
 
-        spine.addEventListener('click', () => playDownload(download));
+        // Play on tape info click (not button)
+        const tapeInfo = spine.querySelector('.tape-info');
+        tapeInfo.addEventListener('click', () => playDownload(download));
+
+        // Offline button click
+        const offlineBtn = spine.querySelector('.offline-btn');
+        offlineBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleOffline(download);
+        });
+
         tapeList.appendChild(spine);
     });
+}
+
+// Offline Storage Functions
+
+// Toggle offline status for a download
+async function toggleOffline(download) {
+    if (state.downloadingIds.has(download.ID)) {
+        return; // Already in progress
+    }
+
+    if (state.offlineIds.has(download.ID)) {
+        // Remove from offline storage
+        try {
+            await window.offlineStorage.deleteAudio(download.ID);
+            state.offlineIds.delete(download.ID);
+            renderDownloads();
+        } catch (error) {
+            console.error('Failed to remove offline audio:', error);
+        }
+    } else {
+        // Save for offline
+        await saveForOffline(download);
+    }
+}
+
+// Fetch and save audio to IndexedDB
+async function saveForOffline(download) {
+    state.downloadingIds.add(download.ID);
+    renderDownloads();
+
+    try {
+        const response = await fetch(`/api/audio/${download.ID}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const metadata = {
+            station: download.Station,
+            show: download.Show,
+            archiveDate: download.ArchiveDate
+        };
+
+        await window.offlineStorage.saveAudio(download.ID, metadata, blob);
+        state.offlineIds.add(download.ID);
+    } catch (error) {
+        console.error('Failed to save audio offline:', error);
+    } finally {
+        state.downloadingIds.delete(download.ID);
+        renderDownloads();
+    }
+}
+
+// Get audio source - returns Blob URL if offline, otherwise API URL
+async function getAudioSource(download) {
+    if (state.offlineIds.has(download.ID)) {
+        try {
+            const record = await window.offlineStorage.getAudio(download.ID);
+            if (record && record.blob) {
+                return URL.createObjectURL(record.blob);
+            }
+        } catch (error) {
+            console.warn('Failed to load offline audio, falling back to network:', error);
+        }
+    }
+    return `/api/audio/${download.ID}`;
 }
 
 // Playback Functions
 
 // Load a download without playing - used when restoring from URL
-function loadDownloadWithoutPlay(download) {
+async function loadDownloadWithoutPlay(download) {
     state.currentDownload = download;
-    audioPlayer.src = `/api/audio/${download.ID}`;
+    audioPlayer.src = await getAudioSource(download);
     audioPlayer.load();
     state.isPlaying = false;
     updateNowPlaying();
@@ -175,9 +288,9 @@ function loadDownloadWithoutPlay(download) {
     renderDownloads(); // Update active state
 }
 
-function playDownload(download, shouldUpdateURL = true) {
+async function playDownload(download, shouldUpdateURL = true) {
     state.currentDownload = download;
-    audioPlayer.src = `/api/audio/${download.ID}`;
+    audioPlayer.src = await getAudioSource(download);
     audioPlayer.load();
     audioPlayer.play();
     state.isPlaying = true;

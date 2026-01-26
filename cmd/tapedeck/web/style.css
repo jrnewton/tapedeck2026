@@ -146,6 +146,7 @@ main {
 .tape-spine .tape-info {
     flex: 1;
     min-width: 0; /* Allow text truncation */
+    cursor: pointer;
 }
 
 .tape-spine .tape-date {
@@ -337,4 +338,56 @@ main {
 /* Play button slightly larger */
 .mini-controls #btn-play {
     width: 60px;
+}
+
+/* Offline Download Button */
+.offline-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 44px; /* Touch target */
+    min-height: 44px;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: var(--black);
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.offline-btn:hover {
+    background: var(--blue);
+}
+
+.offline-btn:active {
+    transform: scale(0.95);
+}
+
+.offline-btn.downloading {
+    background: var(--white);
+    pointer-events: none;
+}
+
+.offline-btn.downloading::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--black);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: offline-spin 0.8s linear infinite;
+}
+
+.offline-btn.saved {
+    background: var(--yellow);
+}
+
+@keyframes offline-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
