@@ -24,3 +24,10 @@ You are working in a Git repository.  Pls commit after each iteration is done an
 # Go Code
 - Project structure must be as simple as possible.
 - Always ask when introducing third party code.
+
+# Testing
+- Unit tests: `go test ./...`
+- E2E tests require Chromium and must run in Docker:
+  ```
+  docker build -f Dockerfile.test -t tapedeck-test . && docker run --rm tapedeck-test
+  ```
