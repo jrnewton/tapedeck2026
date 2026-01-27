@@ -27,16 +27,13 @@ type Show struct {
 	Name      string
 	CachedAt  time.Time
 	Active    bool
+	// Denormalized archive data (current and previous)
+	ArchiveCurrentDate    *time.Time
+	ArchiveCurrentM3UURL  string
+	ArchivePreviousDate   *time.Time
+	ArchivePreviousM3UURL string
 }
 
-// Archive represents a cached archive entry.
-type Archive struct {
-	ID       int64
-	ShowID   int64
-	Date     time.Time
-	M3UURL   string
-	CachedAt time.Time
-}
 
 // Download status constants.
 const (
@@ -217,6 +214,40 @@ func (db *DB) migrate() error {
 		}
 	}
 
+	// Migration: add denormalized archive columns to shows
+	var hasArchiveCurrent bool
+	err = sqlitex.Execute(conn, `SELECT 1 FROM pragma_table_info('shows') WHERE name='archive_current_date'`, &sqlitex.ExecOptions{
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			hasArchiveCurrent = true
+			return nil
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !hasArchiveCurrent {
+		// Add all 4 archive columns
+		archiveColumns := []string{
+			`ALTER TABLE shows ADD COLUMN archive_current_date TEXT`,
+			`ALTER TABLE shows ADD COLUMN archive_current_m3u_url TEXT`,
+			`ALTER TABLE shows ADD COLUMN archive_previous_date TEXT`,
+			`ALTER TABLE shows ADD COLUMN archive_previous_m3u_url TEXT`,
+		}
+		for _, sql := range archiveColumns {
+			if err := sqlitex.Execute(conn, sql, nil); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Migration: drop unused archives table
+	if err := sqlitex.Execute(conn, `DROP TABLE IF EXISTS archives`, nil); err != nil {
+		return err
+	}
+	if err := sqlitex.Execute(conn, `DROP INDEX IF EXISTS idx_archives_show`, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -331,20 +362,33 @@ func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 	var shows []Show
 	var oldestCache time.Time
 
-	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active FROM shows WHERE station_id = ? AND active = 1 ORDER BY name`, &sqlitex.ExecOptions{
+	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active, archive_current_date, archive_current_m3u_url, archive_previous_date, archive_previous_m3u_url FROM shows WHERE station_id = ? AND active = 1 ORDER BY name`, &sqlitex.ExecOptions{
 		Args: []any{stationID},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
 			if oldestCache.IsZero() || cachedAt.Before(oldestCache) {
 				oldestCache = cachedAt
 			}
-			shows = append(shows, Show{
-				ID:        stmt.ColumnInt64(0),
-				StationID: stmt.ColumnInt64(1),
-				Name:      stmt.ColumnText(2),
-				CachedAt:  cachedAt,
-				Active:    stmt.ColumnInt(4) == 1,
-			})
+			show := Show{
+				ID:                    stmt.ColumnInt64(0),
+				StationID:             stmt.ColumnInt64(1),
+				Name:                  stmt.ColumnText(2),
+				CachedAt:              cachedAt,
+				Active:                stmt.ColumnInt(4) == 1,
+				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
+				ArchivePreviousM3UURL: stmt.ColumnText(8),
+			}
+			if stmt.ColumnType(5) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
+					show.ArchiveCurrentDate = &d
+				}
+			}
+			if stmt.ColumnType(7) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
+					show.ArchivePreviousDate = &d
+				}
+			}
+			shows = append(shows, show)
 			return nil
 		},
 	})
@@ -372,7 +416,8 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 
 	var shows []Show
 	err = sqlitex.Execute(conn, `
-		SELECT DISTINCT s.id, s.station_id, s.name, s.cached_at, s.active
+		SELECT DISTINCT s.id, s.station_id, s.name, s.cached_at, s.active,
+			s.archive_current_date, s.archive_current_m3u_url, s.archive_previous_date, s.archive_previous_m3u_url
 		FROM shows s
 		INNER JOIN downloads d ON d.show_id = s.id
 		WHERE s.station_id = ?
@@ -380,13 +425,26 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 		Args: []any{stationID},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
-			shows = append(shows, Show{
-				ID:        stmt.ColumnInt64(0),
-				StationID: stmt.ColumnInt64(1),
-				Name:      stmt.ColumnText(2),
-				CachedAt:  cachedAt,
-				Active:    stmt.ColumnInt(4) == 1,
-			})
+			show := Show{
+				ID:                    stmt.ColumnInt64(0),
+				StationID:             stmt.ColumnInt64(1),
+				Name:                  stmt.ColumnText(2),
+				CachedAt:              cachedAt,
+				Active:                stmt.ColumnInt(4) == 1,
+				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
+				ArchivePreviousM3UURL: stmt.ColumnText(8),
+			}
+			if stmt.ColumnType(5) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
+					show.ArchiveCurrentDate = &d
+				}
+			}
+			if stmt.ColumnType(7) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
+					show.ArchivePreviousDate = &d
+				}
+			}
+			shows = append(shows, show)
 			return nil
 		},
 	})
@@ -434,9 +492,8 @@ func (db *DB) CacheShows(stationID int64, showNames []string) error {
 	return nil
 }
 
-// GetShowByName gets a show by station ID and name.
-// Returns the show regardless of active status.
-func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
+// GetShowByID gets a show by ID.
+func (db *DB) GetShowByID(showID int64) (*Show, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
 		return nil, err
@@ -444,16 +501,28 @@ func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 	defer db.pool.Put(conn)
 
 	var show *Show
-	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active FROM shows WHERE station_id = ? AND name = ?`, &sqlitex.ExecOptions{
-		Args: []any{stationID, name},
+	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active, archive_current_date, archive_current_m3u_url, archive_previous_date, archive_previous_m3u_url FROM shows WHERE id = ?`, &sqlitex.ExecOptions{
+		Args: []any{showID},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
 			show = &Show{
-				ID:        stmt.ColumnInt64(0),
-				StationID: stmt.ColumnInt64(1),
-				Name:      stmt.ColumnText(2),
-				CachedAt:  cachedAt,
-				Active:    stmt.ColumnInt(4) == 1,
+				ID:                    stmt.ColumnInt64(0),
+				StationID:             stmt.ColumnInt64(1),
+				Name:                  stmt.ColumnText(2),
+				CachedAt:              cachedAt,
+				Active:                stmt.ColumnInt(4) == 1,
+				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
+				ArchivePreviousM3UURL: stmt.ColumnText(8),
+			}
+			if stmt.ColumnType(5) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
+					show.ArchiveCurrentDate = &d
+				}
+			}
+			if stmt.ColumnType(7) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
+					show.ArchivePreviousDate = &d
+				}
 			}
 			return nil
 		},
@@ -464,76 +533,91 @@ func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 	return show, nil
 }
 
-// GetCachedArchives returns cached archives for a show if still valid.
-func (db *DB) GetCachedArchives(showID int64) ([]Archive, bool, error) {
+// GetShowByName gets a show by station ID and name.
+// Returns the show regardless of active status.
+func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	defer db.pool.Put(conn)
 
-	var archives []Archive
-	var oldestCache time.Time
-
-	err = sqlitex.Execute(conn, `SELECT id, show_id, date, m3u_url, cached_at FROM archives WHERE show_id = ? ORDER BY date DESC`, &sqlitex.ExecOptions{
-		Args: []any{showID},
+	var show *Show
+	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active, archive_current_date, archive_current_m3u_url, archive_previous_date, archive_previous_m3u_url FROM shows WHERE station_id = ? AND name = ?`, &sqlitex.ExecOptions{
+		Args: []any{stationID, name},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
-			date, _ := time.Parse("2006-01-02", stmt.ColumnText(2))
-			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(4))
-			if oldestCache.IsZero() || cachedAt.Before(oldestCache) {
-				oldestCache = cachedAt
+			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
+			show = &Show{
+				ID:                    stmt.ColumnInt64(0),
+				StationID:             stmt.ColumnInt64(1),
+				Name:                  stmt.ColumnText(2),
+				CachedAt:              cachedAt,
+				Active:                stmt.ColumnInt(4) == 1,
+				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
+				ArchivePreviousM3UURL: stmt.ColumnText(8),
 			}
-			archives = append(archives, Archive{
-				ID:       stmt.ColumnInt64(0),
-				ShowID:   stmt.ColumnInt64(1),
-				Date:     date,
-				M3UURL:   stmt.ColumnText(3),
-				CachedAt: cachedAt,
-			})
+			if stmt.ColumnType(5) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
+					show.ArchiveCurrentDate = &d
+				}
+			}
+			if stmt.ColumnType(7) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
+					show.ArchivePreviousDate = &d
+				}
+			}
 			return nil
 		},
 	})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
-
-	if len(archives) == 0 {
-		return nil, false, nil
-	}
-
-	valid := time.Since(oldestCache) < db.CacheTTL
-	return archives, valid, nil
+	return show, nil
 }
 
-// CacheArchives caches archives for a show.
-func (db *DB) CacheArchives(showID int64, archives []Archive) error {
+// UpdateShowArchive updates the archive columns for a show with rotation logic.
+// If date differs from current, rotates current → previous before updating.
+func (db *DB) UpdateShowArchive(showID int64, date time.Time, m3uURL string) error {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
 		return err
 	}
 	defer db.pool.Put(conn)
 
-	now := time.Now().Format(time.RFC3339)
-
-	// Delete old archives for this show
-	err = sqlitex.Execute(conn, `DELETE FROM archives WHERE show_id = ?`, &sqlitex.ExecOptions{
+	// Read current archive date
+	var currentDate *time.Time
+	err = sqlitex.Execute(conn, `SELECT archive_current_date FROM shows WHERE id = ?`, &sqlitex.ExecOptions{
 		Args: []any{showID},
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			if stmt.ColumnType(0) != sqlite.TypeNull {
+				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(0)); parseErr == nil {
+					currentDate = &d
+				}
+			}
+			return nil
+		},
 	})
 	if err != nil {
 		return err
 	}
 
-	// Insert new archives
-	for _, a := range archives {
-		err = sqlitex.Execute(conn, `INSERT INTO archives (show_id, date, m3u_url, cached_at) VALUES (?, ?, ?, ?)`, &sqlitex.ExecOptions{
-			Args: []any{showID, a.Date.Format("2006-01-02"), a.M3UURL, now},
-		})
-		if err != nil {
-			return err
-		}
-	}
+	dateStr := date.Format("2006-01-02")
 
-	return nil
+	// If current date is NULL or different from new date, rotate
+	if currentDate == nil || !date.Equal(*currentDate) {
+		err = sqlitex.Execute(conn, `
+			UPDATE shows SET
+				archive_previous_date = archive_current_date,
+				archive_previous_m3u_url = archive_current_m3u_url,
+				archive_current_date = ?,
+				archive_current_m3u_url = ?
+			WHERE id = ?`, &sqlitex.ExecOptions{
+			Args: []any{dateStr, m3uURL, showID},
+		})
+	}
+	// If date equals current date, no-op (already cached)
+
+	return err
 }
 
 // InsertDownload inserts a new download record.

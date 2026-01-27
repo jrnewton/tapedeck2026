@@ -171,11 +171,24 @@ func (s *Scheduler) runScheduledDownload(sched db.Schedule, isRetry bool) {
 		return
 	}
 
-	// Get latest archive
-	archive, err := adapter.GetLatestArchive(sched.Show)
-	if err != nil {
-		s.handleFailure(sched, err, isRetry)
-		return
+	// Check if we have cached archive data
+	var archive *tapedeck.Archive
+	show, err := s.db.GetShowByID(sched.ShowID)
+	if err == nil && show != nil && show.ArchiveCurrentDate != nil && show.ArchiveCurrentM3UURL != "" {
+		// Use cached archive data
+		archive = &tapedeck.Archive{
+			ShowName: sched.Show,
+			Date:     *show.ArchiveCurrentDate,
+			M3UURL:   show.ArchiveCurrentM3UURL,
+		}
+		log.Printf("Scheduler: using cached archive for %s (%s)", sched.Show, archive.Date.Format("2006-01-02"))
+	} else {
+		// Fall back to adapter
+		archive, err = adapter.GetLatestArchive(sched.Show)
+		if err != nil {
+			s.handleFailure(sched, err, isRetry)
+			return
+		}
 	}
 
 	// Check if already downloaded

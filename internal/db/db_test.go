@@ -407,55 +407,99 @@ func TestCacheShows_ReactivatesShow(t *testing.T) {
 	}
 }
 
-func TestCacheArchives(t *testing.T) {
+func TestUpdateShowArchive(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
 	}
 	defer db.Close()
 
-	station, err := db.GetOrCreateStation("WMBR", "", "")
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	// Initially no archive data
+	if show.ArchiveCurrentDate != nil {
+		t.Error("expected nil archive date initially")
+	}
+
+	// Add first archive
+	date1 := time.Date(2026, 1, 18, 0, 0, 0, 0, time.UTC)
+	err = db.UpdateShowArchive(show.ID, date1, "https://wmbr.org/m3u/test1.m3u")
 	if err != nil {
-		t.Fatalf("failed to create station: %v", err)
+		t.Fatalf("failed to update archive: %v", err)
 	}
 
-	err = db.CacheShows(station.ID, []string{"Lost and Found"})
+	// Verify archive is stored
+	show, _ = db.GetShowByName(station.ID, "Test Show")
+	if show.ArchiveCurrentDate == nil {
+		t.Fatal("expected archive date to be set")
+	}
+	if !show.ArchiveCurrentDate.Equal(date1) {
+		t.Errorf("expected date %v, got %v", date1, *show.ArchiveCurrentDate)
+	}
+	if show.ArchiveCurrentM3UURL != "https://wmbr.org/m3u/test1.m3u" {
+		t.Errorf("expected m3u URL test1.m3u, got %s", show.ArchiveCurrentM3UURL)
+	}
+	if show.ArchivePreviousDate != nil {
+		t.Error("expected no previous archive yet")
+	}
+
+	// Add second archive (should rotate)
+	date2 := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+	err = db.UpdateShowArchive(show.ID, date2, "https://wmbr.org/m3u/test2.m3u")
 	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
+		t.Fatalf("failed to update archive: %v", err)
 	}
 
-	show, err := db.GetShowByName(station.ID, "Lost and Found")
+	// Verify rotation happened
+	show, _ = db.GetShowByName(station.ID, "Test Show")
+	if !show.ArchiveCurrentDate.Equal(date2) {
+		t.Errorf("expected current date %v, got %v", date2, *show.ArchiveCurrentDate)
+	}
+	if show.ArchiveCurrentM3UURL != "https://wmbr.org/m3u/test2.m3u" {
+		t.Errorf("expected current m3u URL test2.m3u, got %s", show.ArchiveCurrentM3UURL)
+	}
+	if show.ArchivePreviousDate == nil {
+		t.Fatal("expected previous date to be set")
+	}
+	if !show.ArchivePreviousDate.Equal(date1) {
+		t.Errorf("expected previous date %v, got %v", date1, *show.ArchivePreviousDate)
+	}
+	if show.ArchivePreviousM3UURL != "https://wmbr.org/m3u/test1.m3u" {
+		t.Errorf("expected previous m3u URL test1.m3u, got %s", show.ArchivePreviousM3UURL)
+	}
+}
+
+func TestUpdateShowArchive_SameDate_NoOp(t *testing.T) {
+	db, err := Open(":memory:")
 	if err != nil {
-		t.Fatalf("failed to get show: %v", err)
+		t.Fatalf("failed to open database: %v", err)
 	}
+	defer db.Close()
 
-	// Cache archives
-	archives := []Archive{
-		{Date: time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC), M3UURL: "https://wmbr.org/m3u/test1.m3u"},
-		{Date: time.Date(2026, 1, 18, 0, 0, 0, 0, time.UTC), M3UURL: "https://wmbr.org/m3u/test2.m3u"},
-	}
-	err = db.CacheArchives(show.ID, archives)
-	if err != nil {
-		t.Fatalf("failed to cache archives: %v", err)
-	}
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
 
-	// Get cached archives
-	cached, valid, err := db.GetCachedArchives(show.ID)
-	if err != nil {
-		t.Fatalf("failed to get cached archives: %v", err)
-	}
+	// Add first archive
+	date := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+	db.UpdateShowArchive(show.ID, date, "https://wmbr.org/m3u/test.m3u")
 
-	if !valid {
-		t.Error("expected cache to be valid")
-	}
+	// Add second archive with different URL but same date
+	date2 := time.Date(2026, 1, 18, 0, 0, 0, 0, time.UTC)
+	db.UpdateShowArchive(show.ID, date2, "https://wmbr.org/m3u/test2.m3u")
 
-	if len(cached) != 2 {
-		t.Errorf("expected 2 archives, got %d", len(cached))
-	}
+	// Now call with same date again - should not rotate
+	db.UpdateShowArchive(show.ID, date2, "https://wmbr.org/m3u/test2_updated.m3u")
 
-	// Should be sorted by date descending
-	if cached[0].Date.Before(cached[1].Date) {
-		t.Error("expected archives sorted by date descending")
+	// Verify no rotation happened (previous should still be date)
+	show, _ = db.GetShowByName(station.ID, "Test Show")
+	if show.ArchivePreviousDate == nil {
+		t.Fatal("expected previous date to be set")
+	}
+	if !show.ArchivePreviousDate.Equal(date) {
+		t.Errorf("expected previous date to remain %v, got %v", date, *show.ArchivePreviousDate)
 	}
 }
 

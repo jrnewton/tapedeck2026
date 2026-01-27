@@ -160,6 +160,20 @@ func cmdListShows(args []string) error {
 		fmt.Fprintf(os.Stderr, "warning: could not cache shows: %v\n", err)
 	}
 
+	// Cache archives for each show
+	for _, showName := range shows {
+		show, err := database.GetShowByName(station.ID, showName)
+		if err != nil || show == nil {
+			continue
+		}
+		archive, err := adapter.GetLatestArchive(showName)
+		if err == nil && archive != nil {
+			if err := database.UpdateShowArchive(show.ID, archive.Date, archive.M3UURL); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not cache archive for %s: %v\n", showName, err)
+			}
+		}
+	}
+
 	fmt.Printf("Shows available on %s (%d):\n", callSign, len(shows))
 	for _, show := range shows {
 		fmt.Printf("  %s\n", show)
@@ -269,9 +283,32 @@ func cmdDownloadShow(args []string) error {
 	var archive *tapedeck.Archive
 
 	if *latest {
-		archive, err = adapter.GetLatestArchive(showName)
+		// Check if we have cached archive data
+		database, err := openDB()
 		if err != nil {
-			return fmt.Errorf("get latest archive: %w", err)
+			return err
+		}
+		station, err := database.GetOrCreateStation(callSign, "", "")
+		if err != nil {
+			database.Close()
+			return err
+		}
+		show, _ := database.GetShowByName(station.ID, showName)
+		database.Close()
+
+		if show != nil && show.ArchiveCurrentDate != nil && show.ArchiveCurrentM3UURL != "" {
+			// Use cached archive data
+			archive = &tapedeck.Archive{
+				ShowName: showName,
+				Date:     *show.ArchiveCurrentDate,
+				M3UURL:   show.ArchiveCurrentM3UURL,
+			}
+		} else {
+			// Fall back to adapter
+			archive, err = adapter.GetLatestArchive(showName)
+			if err != nil {
+				return fmt.Errorf("get latest archive: %w", err)
+			}
 		}
 	} else {
 		// Parse date and find matching archive
