@@ -453,11 +453,19 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If no cron provided, we would need to infer it from adapter
-	// For now, require it
+	// If no cron provided, auto-determine from adapter
 	if req.Cron == "" {
-		http.Error(w, "cron expression is required", http.StatusBadRequest)
-		return
+		adapter, adapterErr := tapedeck.GetAdapter(station.CallSign)
+		if adapterErr != nil {
+			http.Error(w, "cannot determine schedule: unknown station", http.StatusBadRequest)
+			return
+		}
+		schedule, schedErr := adapter.GetShowSchedule(req.Show)
+		if schedErr != nil {
+			http.Error(w, "cannot determine schedule: "+schedErr.Error(), http.StatusBadRequest)
+			return
+		}
+		req.Cron = schedule.RecommendedCron
 	}
 
 	sched, err := s.Scheduler.AddSchedule(station.ID, show.ID, req.Cron)

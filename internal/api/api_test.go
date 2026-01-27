@@ -578,3 +578,139 @@ func TestQueueDownload_Duplicate(t *testing.T) {
 		t.Errorf("duplicate request expected status 409, got %d: %s", w2.Code, w2.Body.String())
 	}
 }
+
+// mockScheduler implements the Scheduler interface for testing.
+type mockScheduler struct {
+	db        *db.DB
+	schedules map[int64]*db.Schedule
+	nextID    int64
+}
+
+func newMockScheduler(database *db.DB) *mockScheduler {
+	return &mockScheduler{
+		db:        database,
+		schedules: make(map[int64]*db.Schedule),
+		nextID:    1,
+	}
+}
+
+func (m *mockScheduler) AddSchedule(stationID, showID int64, cronExpr string) (*db.Schedule, error) {
+	sched := &db.Schedule{
+		ID:             m.nextID,
+		StationID:      stationID,
+		ShowID:         showID,
+		CronExpression: cronExpr,
+		Enabled:        true,
+	}
+	m.schedules[m.nextID] = sched
+	m.nextID++
+	return sched, nil
+}
+
+func (m *mockScheduler) RemoveSchedule(id int64) error {
+	delete(m.schedules, id)
+	return nil
+}
+
+func (m *mockScheduler) ListSchedules() ([]db.Schedule, error) {
+	result := make([]db.Schedule, 0, len(m.schedules))
+	for _, s := range m.schedules {
+		result = append(result, *s)
+	}
+	return result, nil
+}
+
+func (m *mockScheduler) GetSchedule(id int64) (*db.Schedule, error) {
+	s, ok := m.schedules[id]
+	if !ok {
+		return nil, nil
+	}
+	return s, nil
+}
+
+func (m *mockScheduler) SetEnabled(id int64, enabled bool) error {
+	if s, ok := m.schedules[id]; ok {
+		s.Enabled = enabled
+	}
+	return nil
+}
+
+func TestCreateScheduleAutoCron(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	// Set up mock scheduler
+	server.Scheduler = newMockScheduler(database)
+
+	// Create station and show (required for schedule creation)
+	station, _ := database.GetOrCreateStation("WMBR", "", "")
+	database.InsertShow(station.ID, "Late Risers' Club")
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	// Create schedule WITHOUT providing cron - should auto-determine
+	body := `{"station":"WMBR","show":"Late Risers' Club"}`
+	req := httptest.NewRequest("POST", "/api/schedules", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var schedule db.Schedule
+	if err := json.Unmarshal(w.Body.Bytes(), &schedule); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should have auto-determined a cron expression
+	if schedule.CronExpression == "" {
+		t.Error("expected auto-determined cron expression, got empty string")
+	}
+
+	// Cron should be in format "MM HH * * D"
+	if !strings.Contains(schedule.CronExpression, "*") {
+		t.Errorf("expected cron with wildcards, got %s", schedule.CronExpression)
+	}
+}
+
+func TestCreateScheduleWithCron(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	// Set up mock scheduler
+	server.Scheduler = newMockScheduler(database)
+
+	// Create station and show
+	station, _ := database.GetOrCreateStation("WMBR", "", "")
+	database.InsertShow(station.ID, "Test Show")
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	// Create schedule WITH explicit cron
+	body := `{"station":"WMBR","show":"Test Show","cron":"0 12 * * 0"}`
+	req := httptest.NewRequest("POST", "/api/schedules", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var schedule db.Schedule
+	if err := json.Unmarshal(w.Body.Bytes(), &schedule); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if schedule.CronExpression != "0 12 * * 0" {
+		t.Errorf("expected cron '0 12 * * 0', got %s", schedule.CronExpression)
+	}
+}
