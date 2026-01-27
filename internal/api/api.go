@@ -11,10 +11,20 @@ import (
 	"local/tapedeck/internal/db"
 )
 
+// Scheduler interface for schedule management.
+type Scheduler interface {
+	AddSchedule(stationID, showID int64, cronExpr string) (*db.Schedule, error)
+	RemoveSchedule(id int64) error
+	ListSchedules() ([]db.Schedule, error)
+	GetSchedule(id int64) (*db.Schedule, error)
+	SetEnabled(id int64, enabled bool) error
+}
+
 // Server holds API dependencies.
 type Server struct {
 	DB           *db.DB
 	DownloadsDir string
+	Scheduler    Scheduler
 }
 
 // NewServer creates a new API server.
@@ -33,6 +43,13 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/downloads/{id}", s.handleGetDownload)
 	mux.HandleFunc("GET /api/shows/{id}/downloads", s.handleListShowDownloads)
 	mux.HandleFunc("GET /api/audio/{id}", s.handleStreamAudio)
+
+	// Schedule endpoints
+	mux.HandleFunc("GET /api/schedules", s.handleListSchedules)
+	mux.HandleFunc("POST /api/schedules", s.handleCreateSchedule)
+	mux.HandleFunc("GET /api/schedules/{id}", s.handleGetSchedule)
+	mux.HandleFunc("DELETE /api/schedules/{id}", s.handleDeleteSchedule)
+	mux.HandleFunc("PATCH /api/schedules/{id}", s.handleUpdateSchedule)
 }
 
 // handleListStations returns all registered stations.
@@ -190,6 +207,178 @@ func (s *Server) handleStreamAudio(w http.ResponseWriter, r *http.Request) {
 
 	// Serve file with Range support
 	http.ServeFile(w, r, absPath)
+}
+
+// handleListSchedules returns all schedules.
+func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
+	if s.Scheduler == nil {
+		http.Error(w, "scheduler not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	schedules, err := s.Scheduler.ListSchedules()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure we return [] instead of null
+	if schedules == nil {
+		schedules = []db.Schedule{}
+	}
+
+	writeJSON(w, map[string]any{"schedules": schedules})
+}
+
+// handleCreateSchedule creates a new schedule.
+func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
+	if s.Scheduler == nil {
+		http.Error(w, "scheduler not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	var req struct {
+		Station string `json:"station"`
+		Show    string `json:"show"`
+		Cron    string `json:"cron"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Station == "" || req.Show == "" {
+		http.Error(w, "station and show are required", http.StatusBadRequest)
+		return
+	}
+
+	// Get station
+	station, err := s.DB.GetStation(strings.ToUpper(req.Station))
+	if err != nil {
+		http.Error(w, "station not found: "+req.Station, http.StatusNotFound)
+		return
+	}
+
+	// Get show
+	show, err := s.DB.GetShowByName(station.ID, req.Show)
+	if err != nil || show == nil {
+		http.Error(w, "show not found: "+req.Show, http.StatusNotFound)
+		return
+	}
+
+	// Check if schedule already exists
+	existing, err := s.DB.FindScheduleByShowID(station.ID, show.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if existing != nil {
+		http.Error(w, "schedule already exists for this show", http.StatusConflict)
+		return
+	}
+
+	// If no cron provided, we would need to infer it from adapter
+	// For now, require it
+	if req.Cron == "" {
+		http.Error(w, "cron expression is required", http.StatusBadRequest)
+		return
+	}
+
+	sched, err := s.Scheduler.AddSchedule(station.ID, show.ID, req.Cron)
+	if err != nil {
+		http.Error(w, "invalid cron expression: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, sched)
+}
+
+// handleGetSchedule returns a single schedule by ID.
+func (s *Server) handleGetSchedule(w http.ResponseWriter, r *http.Request) {
+	if s.Scheduler == nil {
+		http.Error(w, "scheduler not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid schedule id", http.StatusBadRequest)
+		return
+	}
+
+	sched, err := s.Scheduler.GetSchedule(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, sched)
+}
+
+// handleDeleteSchedule removes a schedule.
+func (s *Server) handleDeleteSchedule(w http.ResponseWriter, r *http.Request) {
+	if s.Scheduler == nil {
+		http.Error(w, "scheduler not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid schedule id", http.StatusBadRequest)
+		return
+	}
+
+	err = s.Scheduler.RemoveSchedule(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleUpdateSchedule updates a schedule (enable/disable).
+func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
+	if s.Scheduler == nil {
+		http.Error(w, "scheduler not configured", http.StatusServiceUnavailable)
+		return
+	}
+
+	idStr := r.PathValue("id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid schedule id", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Enabled *bool `json:"enabled"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Enabled != nil {
+		if err := s.Scheduler.SetEnabled(id, *req.Enabled); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Return updated schedule
+	sched, err := s.Scheduler.GetSchedule(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, sched)
 }
 
 // writeJSON writes a JSON response.

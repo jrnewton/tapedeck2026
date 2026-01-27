@@ -45,6 +45,14 @@ const (
 	StatusFailed      = "failed"
 )
 
+// Schedule status constants.
+const (
+	ScheduleStatusSuccess  = "success"
+	ScheduleStatusFailed   = "failed"
+	ScheduleStatusSkipped  = "skipped"
+	ScheduleStatusRetrying = "retrying"
+)
+
 // Download represents a downloaded archive record.
 type Download struct {
 	ID          int64
@@ -57,6 +65,26 @@ type Download struct {
 	Error       string // error message if failed
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	// Denormalized fields for display
+	Station string
+	Show    string
+}
+
+// Schedule represents a scheduled download job.
+type Schedule struct {
+	ID             int64
+	StationID      int64
+	ShowID         int64
+	CronExpression string
+	Enabled        bool
+	LastRunAt      *time.Time
+	LastStatus     string
+	LastError      string
+	RetryCount     int
+	NextRetryAt    *time.Time
+	NextRunAt      *time.Time
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 	// Denormalized fields for display
 	Station string
 	Show    string
@@ -142,10 +170,29 @@ func (db *DB) migrate() error {
 			updated_at TEXT
 		);
 
+		CREATE TABLE IF NOT EXISTS schedules (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			station_id INTEGER NOT NULL REFERENCES stations(id),
+			show_id INTEGER NOT NULL REFERENCES shows(id),
+			cron_expression TEXT NOT NULL,
+			enabled INTEGER NOT NULL DEFAULT 1,
+			last_run_at TEXT,
+			last_status TEXT,
+			last_error TEXT,
+			retry_count INTEGER NOT NULL DEFAULT 0,
+			next_retry_at TEXT,
+			next_run_at TEXT,
+			created_at TEXT NOT NULL DEFAULT (datetime('now')),
+			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+			UNIQUE(station_id, show_id)
+		);
+
 		CREATE INDEX IF NOT EXISTS idx_shows_station ON shows(station_id);
 		CREATE INDEX IF NOT EXISTS idx_archives_show ON archives(show_id);
 		CREATE INDEX IF NOT EXISTS idx_downloads_station ON downloads(station_id);
 		CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
+		CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules(next_run_at);
+		CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
 	`
 	return sqlitex.ExecuteScript(conn, schema, nil)
 }
@@ -753,4 +800,268 @@ func (db *DB) queryDownloads(conn *sqlite.Conn, query string, args []any) ([]Dow
 	})
 
 	return downloads, err
+}
+
+// InsertSchedule inserts a new schedule record.
+func (db *DB) InsertSchedule(s *Schedule) (int64, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	defer db.pool.Put(conn)
+
+	now := time.Now().Format(time.RFC3339)
+
+	var nextRunAt any = nil
+	if s.NextRunAt != nil {
+		nextRunAt = s.NextRunAt.Format(time.RFC3339)
+	}
+
+	enabled := 1
+	if !s.Enabled {
+		enabled = 0
+	}
+
+	err = sqlitex.Execute(conn, `INSERT INTO schedules (station_id, show_id, cron_expression, enabled, next_run_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`, &sqlitex.ExecOptions{
+		Args: []any{
+			s.StationID,
+			s.ShowID,
+			s.CronExpression,
+			enabled,
+			nextRunAt,
+			now,
+			now,
+		},
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return conn.LastInsertRowID(), nil
+}
+
+// GetSchedule returns a schedule by ID.
+func (db *DB) GetSchedule(id int64) (*Schedule, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT s.id, s.station_id, s.show_id, s.cron_expression, s.enabled,
+		       s.last_run_at, s.last_status, s.last_error, s.retry_count, s.next_retry_at, s.next_run_at,
+		       s.created_at, s.updated_at, st.call_sign, sh.name
+		FROM schedules s
+		JOIN stations st ON s.station_id = st.id
+		JOIN shows sh ON s.show_id = sh.id
+		WHERE s.id = ?`
+
+	schedules, err := db.querySchedules(conn, query, []any{id})
+	if err != nil {
+		return nil, err
+	}
+	if len(schedules) == 0 {
+		return nil, fmt.Errorf("schedule not found: %d", id)
+	}
+	return &schedules[0], nil
+}
+
+// ListSchedules returns all schedules.
+func (db *DB) ListSchedules() ([]Schedule, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT s.id, s.station_id, s.show_id, s.cron_expression, s.enabled,
+		       s.last_run_at, s.last_status, s.last_error, s.retry_count, s.next_retry_at, s.next_run_at,
+		       s.created_at, s.updated_at, st.call_sign, sh.name
+		FROM schedules s
+		JOIN stations st ON s.station_id = st.id
+		JOIN shows sh ON s.show_id = sh.id
+		ORDER BY sh.name`
+
+	return db.querySchedules(conn, query, nil)
+}
+
+// ListDueSchedules returns schedules that are due to run (next_run_at <= now and enabled).
+func (db *DB) ListDueSchedules(now time.Time) ([]Schedule, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT s.id, s.station_id, s.show_id, s.cron_expression, s.enabled,
+		       s.last_run_at, s.last_status, s.last_error, s.retry_count, s.next_retry_at, s.next_run_at,
+		       s.created_at, s.updated_at, st.call_sign, sh.name
+		FROM schedules s
+		JOIN stations st ON s.station_id = st.id
+		JOIN shows sh ON s.show_id = sh.id
+		WHERE s.enabled = 1 AND s.next_run_at IS NOT NULL AND s.next_run_at <= ?
+		ORDER BY s.next_run_at`
+
+	return db.querySchedules(conn, query, []any{now.Format(time.RFC3339)})
+}
+
+// ListRetrySchedules returns schedules that are due for retry (next_retry_at <= now and enabled).
+func (db *DB) ListRetrySchedules(now time.Time) ([]Schedule, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT s.id, s.station_id, s.show_id, s.cron_expression, s.enabled,
+		       s.last_run_at, s.last_status, s.last_error, s.retry_count, s.next_retry_at, s.next_run_at,
+		       s.created_at, s.updated_at, st.call_sign, sh.name
+		FROM schedules s
+		JOIN stations st ON s.station_id = st.id
+		JOIN shows sh ON s.show_id = sh.id
+		WHERE s.enabled = 1 AND s.next_retry_at IS NOT NULL AND s.next_retry_at <= ?
+		ORDER BY s.next_retry_at`
+
+	return db.querySchedules(conn, query, []any{now.Format(time.RFC3339)})
+}
+
+// UpdateScheduleStatus updates the status fields of a schedule after a run.
+func (db *DB) UpdateScheduleStatus(id int64, status, errMsg string, nextRunAt, nextRetryAt *time.Time, retryCount int) error {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return err
+	}
+	defer db.pool.Put(conn)
+
+	now := time.Now()
+
+	var nextRun any = nil
+	if nextRunAt != nil {
+		nextRun = nextRunAt.Format(time.RFC3339)
+	}
+
+	var nextRetry any = nil
+	if nextRetryAt != nil {
+		nextRetry = nextRetryAt.Format(time.RFC3339)
+	}
+
+	var errVal any = nil
+	if errMsg != "" {
+		errVal = errMsg
+	}
+
+	return sqlitex.Execute(conn, `UPDATE schedules SET last_run_at = ?, last_status = ?, last_error = ?, retry_count = ?, next_retry_at = ?, next_run_at = ?, updated_at = ? WHERE id = ?`, &sqlitex.ExecOptions{
+		Args: []any{now.Format(time.RFC3339), status, errVal, retryCount, nextRetry, nextRun, now.Format(time.RFC3339), id},
+	})
+}
+
+// UpdateScheduleEnabled updates the enabled flag of a schedule.
+func (db *DB) UpdateScheduleEnabled(id int64, enabled bool) error {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return err
+	}
+	defer db.pool.Put(conn)
+
+	enabledVal := 0
+	if enabled {
+		enabledVal = 1
+	}
+
+	return sqlitex.Execute(conn, `UPDATE schedules SET enabled = ?, updated_at = ? WHERE id = ?`, &sqlitex.ExecOptions{
+		Args: []any{enabledVal, time.Now().Format(time.RFC3339), id},
+	})
+}
+
+// DeleteSchedule removes a schedule by ID.
+func (db *DB) DeleteSchedule(id int64) error {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return err
+	}
+	defer db.pool.Put(conn)
+
+	return sqlitex.Execute(conn, `DELETE FROM schedules WHERE id = ?`, &sqlitex.ExecOptions{
+		Args: []any{id},
+	})
+}
+
+// FindScheduleByShowID finds a schedule for a specific station and show.
+func (db *DB) FindScheduleByShowID(stationID, showID int64) (*Schedule, error) {
+	conn, err := db.pool.Take(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer db.pool.Put(conn)
+
+	query := `
+		SELECT s.id, s.station_id, s.show_id, s.cron_expression, s.enabled,
+		       s.last_run_at, s.last_status, s.last_error, s.retry_count, s.next_retry_at, s.next_run_at,
+		       s.created_at, s.updated_at, st.call_sign, sh.name
+		FROM schedules s
+		JOIN stations st ON s.station_id = st.id
+		JOIN shows sh ON s.show_id = sh.id
+		WHERE s.station_id = ? AND s.show_id = ?`
+
+	schedules, err := db.querySchedules(conn, query, []any{stationID, showID})
+	if err != nil {
+		return nil, err
+	}
+	if len(schedules) == 0 {
+		return nil, nil
+	}
+	return &schedules[0], nil
+}
+
+// querySchedules executes a schedule query and returns results.
+func (db *DB) querySchedules(conn *sqlite.Conn, query string, args []any) ([]Schedule, error) {
+	var schedules []Schedule
+	err := sqlitex.Execute(conn, query, &sqlitex.ExecOptions{
+		Args: args,
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			s := Schedule{
+				ID:             stmt.ColumnInt64(0),
+				StationID:      stmt.ColumnInt64(1),
+				ShowID:         stmt.ColumnInt64(2),
+				CronExpression: stmt.ColumnText(3),
+				Enabled:        stmt.ColumnInt(4) == 1,
+				LastStatus:     stmt.ColumnText(6),
+				LastError:      stmt.ColumnText(7),
+				RetryCount:     stmt.ColumnInt(8),
+				Station:        stmt.ColumnText(13),
+				Show:           stmt.ColumnText(14),
+			}
+
+			if stmt.ColumnType(5) != sqlite.TypeNull {
+				if t, err := time.Parse(time.RFC3339, stmt.ColumnText(5)); err == nil {
+					s.LastRunAt = &t
+				}
+			}
+			if stmt.ColumnType(9) != sqlite.TypeNull {
+				if t, err := time.Parse(time.RFC3339, stmt.ColumnText(9)); err == nil {
+					s.NextRetryAt = &t
+				}
+			}
+			if stmt.ColumnType(10) != sqlite.TypeNull {
+				if t, err := time.Parse(time.RFC3339, stmt.ColumnText(10)); err == nil {
+					s.NextRunAt = &t
+				}
+			}
+			if t, err := time.Parse(time.RFC3339, stmt.ColumnText(11)); err == nil {
+				s.CreatedAt = t
+			}
+			if t, err := time.Parse(time.RFC3339, stmt.ColumnText(12)); err == nil {
+				s.UpdatedAt = t
+			}
+
+			schedules = append(schedules, s)
+			return nil
+		},
+	})
+
+	return schedules, err
 }

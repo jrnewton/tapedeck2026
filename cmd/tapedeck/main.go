@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"local/tapedeck/internal/api"
 	"local/tapedeck/internal/db"
+	"local/tapedeck/internal/scheduler"
 
 	// Register adapters
 	_ "local/tapedeck/internal/adapters/wmbr"
@@ -71,8 +73,20 @@ func main() {
 	}
 	defer database.Close()
 
+	// Configure and start scheduler
+	schedulerCfg := scheduler.DefaultConfig()
+	if maxConcurrent := os.Getenv("TAPEDECK_MAX_CONCURRENT"); maxConcurrent != "" {
+		if n, err := strconv.Atoi(maxConcurrent); err == nil && n > 0 {
+			schedulerCfg.MaxConcurrent = n
+		}
+	}
+	sched := scheduler.New(database, downloadsDir, schedulerCfg)
+	sched.Start()
+	defer sched.Stop()
+
 	// Create API server
 	apiServer := api.NewServer(database, downloadsDir)
+	apiServer.Scheduler = sched
 
 	// Register routes
 	mux := http.NewServeMux()

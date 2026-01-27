@@ -742,3 +742,336 @@ func TestListDownloadsByShowID(t *testing.T) {
 		t.Errorf("expected 1 download for show2, got %d", len(show2Downloads))
 	}
 }
+
+// Schedule tests
+
+func TestInsertSchedule(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	nextRun := time.Date(2026, 2, 2, 4, 30, 0, 0, time.UTC)
+	s := &Schedule{
+		StationID:      station.ID,
+		ShowID:         show.ID,
+		CronExpression: "30 4 * * 0",
+		Enabled:        true,
+		NextRunAt:      &nextRun,
+	}
+
+	id, err := db.InsertSchedule(s)
+	if err != nil {
+		t.Fatalf("failed to insert schedule: %v", err)
+	}
+
+	if id <= 0 {
+		t.Errorf("expected positive ID, got %d", id)
+	}
+
+	// Verify we can retrieve it
+	got, err := db.GetSchedule(id)
+	if err != nil {
+		t.Fatalf("failed to get schedule: %v", err)
+	}
+	if got.CronExpression != "30 4 * * 0" {
+		t.Errorf("expected cron '30 4 * * 0', got %q", got.CronExpression)
+	}
+	if !got.Enabled {
+		t.Error("expected schedule to be enabled")
+	}
+	if got.Station != "WMBR" {
+		t.Errorf("expected station 'WMBR', got %q", got.Station)
+	}
+	if got.Show != "Test Show" {
+		t.Errorf("expected show 'Test Show', got %q", got.Show)
+	}
+}
+
+func TestListSchedules(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show A", "Show B"})
+	showA, _ := db.GetShowByName(station.ID, "Show A")
+	showB, _ := db.GetShowByName(station.ID, "Show B")
+
+	// Initially empty
+	schedules, err := db.ListSchedules()
+	if err != nil {
+		t.Fatalf("failed to list schedules: %v", err)
+	}
+	if len(schedules) != 0 {
+		t.Errorf("expected 0 schedules, got %d", len(schedules))
+	}
+
+	// Add schedules
+	db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: showA.ID, CronExpression: "30 4 * * 0", Enabled: true})
+	db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: showB.ID, CronExpression: "0 5 * * 1", Enabled: true})
+
+	schedules, err = db.ListSchedules()
+	if err != nil {
+		t.Fatalf("failed to list schedules: %v", err)
+	}
+	if len(schedules) != 2 {
+		t.Errorf("expected 2 schedules, got %d", len(schedules))
+	}
+}
+
+func TestScheduleUniqueConstraint(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	// Insert first schedule
+	_, err = db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: show.ID, CronExpression: "30 4 * * 0", Enabled: true})
+	if err != nil {
+		t.Fatalf("failed to insert first schedule: %v", err)
+	}
+
+	// Duplicate should fail
+	_, err = db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: show.ID, CronExpression: "0 5 * * 1", Enabled: true})
+	if err == nil {
+		t.Error("expected error for duplicate station+show")
+	}
+}
+
+func TestUpdateScheduleStatus(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	nextRun := time.Date(2026, 2, 2, 4, 30, 0, 0, time.UTC)
+	id, _ := db.InsertSchedule(&Schedule{
+		StationID:      station.ID,
+		ShowID:         show.ID,
+		CronExpression: "30 4 * * 0",
+		Enabled:        true,
+		NextRunAt:      &nextRun,
+	})
+
+	// Update to success
+	newNextRun := time.Date(2026, 2, 9, 4, 30, 0, 0, time.UTC)
+	err = db.UpdateScheduleStatus(id, ScheduleStatusSuccess, "", &newNextRun, nil, 0)
+	if err != nil {
+		t.Fatalf("failed to update status: %v", err)
+	}
+
+	got, _ := db.GetSchedule(id)
+	if got.LastStatus != ScheduleStatusSuccess {
+		t.Errorf("expected status 'success', got %q", got.LastStatus)
+	}
+	if got.LastRunAt == nil {
+		t.Error("expected last_run_at to be set")
+	}
+	if got.RetryCount != 0 {
+		t.Errorf("expected retry_count=0, got %d", got.RetryCount)
+	}
+}
+
+func TestUpdateScheduleStatus_Retry(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	nextRun := time.Date(2026, 2, 2, 4, 30, 0, 0, time.UTC)
+	id, _ := db.InsertSchedule(&Schedule{
+		StationID:      station.ID,
+		ShowID:         show.ID,
+		CronExpression: "30 4 * * 0",
+		Enabled:        true,
+		NextRunAt:      &nextRun,
+	})
+
+	// Update to retrying
+	nextRetry := time.Now().Add(1 * time.Minute)
+	err = db.UpdateScheduleStatus(id, ScheduleStatusRetrying, "connection timeout", &nextRun, &nextRetry, 1)
+	if err != nil {
+		t.Fatalf("failed to update status: %v", err)
+	}
+
+	got, _ := db.GetSchedule(id)
+	if got.LastStatus != ScheduleStatusRetrying {
+		t.Errorf("expected status 'retrying', got %q", got.LastStatus)
+	}
+	if got.LastError != "connection timeout" {
+		t.Errorf("expected error 'connection timeout', got %q", got.LastError)
+	}
+	if got.RetryCount != 1 {
+		t.Errorf("expected retry_count=1, got %d", got.RetryCount)
+	}
+	if got.NextRetryAt == nil {
+		t.Error("expected next_retry_at to be set")
+	}
+}
+
+func TestUpdateScheduleEnabled(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	id, _ := db.InsertSchedule(&Schedule{
+		StationID:      station.ID,
+		ShowID:         show.ID,
+		CronExpression: "30 4 * * 0",
+		Enabled:        true,
+	})
+
+	// Disable
+	err = db.UpdateScheduleEnabled(id, false)
+	if err != nil {
+		t.Fatalf("failed to disable: %v", err)
+	}
+
+	got, _ := db.GetSchedule(id)
+	if got.Enabled {
+		t.Error("expected disabled")
+	}
+
+	// Re-enable
+	err = db.UpdateScheduleEnabled(id, true)
+	if err != nil {
+		t.Fatalf("failed to enable: %v", err)
+	}
+
+	got, _ = db.GetSchedule(id)
+	if !got.Enabled {
+		t.Error("expected enabled")
+	}
+}
+
+func TestDeleteSchedule(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Test Show"})
+	show, _ := db.GetShowByName(station.ID, "Test Show")
+
+	id, _ := db.InsertSchedule(&Schedule{
+		StationID:      station.ID,
+		ShowID:         show.ID,
+		CronExpression: "30 4 * * 0",
+		Enabled:        true,
+	})
+
+	err = db.DeleteSchedule(id)
+	if err != nil {
+		t.Fatalf("failed to delete: %v", err)
+	}
+
+	// Verify it's gone
+	_, err = db.GetSchedule(id)
+	if err == nil {
+		t.Error("expected error for deleted schedule")
+	}
+}
+
+func TestListDueSchedules(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show A", "Show B", "Show C"})
+	showA, _ := db.GetShowByName(station.ID, "Show A")
+	showB, _ := db.GetShowByName(station.ID, "Show B")
+	showC, _ := db.GetShowByName(station.ID, "Show C")
+
+	now := time.Now()
+	past := now.Add(-1 * time.Hour)
+	future := now.Add(1 * time.Hour)
+
+	// Due (past next_run_at)
+	db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: showA.ID, CronExpression: "30 4 * * 0", Enabled: true, NextRunAt: &past})
+	// Not due (future next_run_at)
+	db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: showB.ID, CronExpression: "0 5 * * 1", Enabled: true, NextRunAt: &future})
+	// Disabled (should not be returned)
+	db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: showC.ID, CronExpression: "0 6 * * 2", Enabled: false, NextRunAt: &past})
+
+	due, err := db.ListDueSchedules(now)
+	if err != nil {
+		t.Fatalf("failed to list due: %v", err)
+	}
+
+	if len(due) != 1 {
+		t.Errorf("expected 1 due schedule, got %d", len(due))
+	}
+	if len(due) > 0 && due[0].Show != "Show A" {
+		t.Errorf("expected 'Show A', got %q", due[0].Show)
+	}
+}
+
+func TestFindScheduleByShowID(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+	db.CacheShows(station.ID, []string{"Show A", "Show B"})
+	showA, _ := db.GetShowByName(station.ID, "Show A")
+	showB, _ := db.GetShowByName(station.ID, "Show B")
+
+	db.InsertSchedule(&Schedule{StationID: station.ID, ShowID: showA.ID, CronExpression: "30 4 * * 0", Enabled: true})
+
+	// Find existing
+	found, err := db.FindScheduleByShowID(station.ID, showA.ID)
+	if err != nil {
+		t.Fatalf("failed to find: %v", err)
+	}
+	if found == nil {
+		t.Fatal("expected to find schedule")
+	}
+	if found.Show != "Show A" {
+		t.Errorf("expected 'Show A', got %q", found.Show)
+	}
+
+	// Not found
+	found, err = db.FindScheduleByShowID(station.ID, showB.ID)
+	if err != nil {
+		t.Fatalf("failed to find: %v", err)
+	}
+	if found != nil {
+		t.Error("expected nil for non-existent schedule")
+	}
+}
