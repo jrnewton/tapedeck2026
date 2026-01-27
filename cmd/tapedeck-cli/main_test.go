@@ -68,6 +68,42 @@ func TestDescribeCron(t *testing.T) {
 	}
 }
 
+func TestListDownloads_UnknownStation(t *testing.T) {
+	err := cmdListDownloads([]string{"XKJF"})
+	if err == nil {
+		t.Error("expected error for unknown station")
+	}
+	if err.Error() != "unknown station: XKJF" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestDownloadShow_MissingArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{"no args", []string{}},
+		{"only station", []string{"WMBR"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := cmdDownloadShow(tc.args)
+			if err == nil {
+				t.Error("expected error for missing arguments")
+			}
+		})
+	}
+}
+
+func TestDownloadShow_UnknownStation(t *testing.T) {
+	err := cmdDownloadShow([]string{"XKJF", "SomeShow"})
+	if err == nil {
+		t.Error("expected error for unknown station")
+	}
+}
+
 func TestServerURLFromEnv(t *testing.T) {
 	// Test default
 	os.Unsetenv("TAPEDECK_SERVER_URL")

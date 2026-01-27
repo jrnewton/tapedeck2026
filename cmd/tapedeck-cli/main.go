@@ -167,6 +167,12 @@ func cmdListDownloads(args []string) error {
 	var callSign string
 	if len(args) > 0 {
 		callSign = strings.ToUpper(args[0])
+
+		// Validate station exists
+		_, err := tapedeck.GetAdapter(callSign)
+		if err != nil {
+			return fmt.Errorf("unknown station: %s", callSign)
+		}
 	}
 
 	database, err := openDB()
@@ -237,6 +243,22 @@ func cmdDownloadShow(args []string) error {
 	adapter, err := tapedeck.GetAdapter(callSign)
 	if err != nil {
 		return err
+	}
+
+	// Validate show name exists
+	availableShows, err := adapter.ListShows()
+	if err != nil {
+		return fmt.Errorf("list shows: %w", err)
+	}
+	showFound := false
+	for _, s := range availableShows {
+		if s == showName {
+			showFound = true
+			break
+		}
+	}
+	if !showFound {
+		return fmt.Errorf("unknown show: %s", showName)
 	}
 
 	var archive *tapedeck.Archive
