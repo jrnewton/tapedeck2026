@@ -502,3 +502,311 @@ main {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* =====================================================
+   Downloads Page Styles
+   ===================================================== */
+
+/* Hidden utility class */
+.hidden {
+    display: none !important;
+}
+
+/* Main view container */
+#main-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Downloads view container */
+#downloads-view {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    background-color: var(--blue);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Downloads header */
+.downloads-header {
+    background-color: var(--yellow);
+    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 3px solid var(--black);
+    flex-shrink: 0;
+}
+
+.downloads-header h2 {
+    color: var(--black);
+    font-size: 1.2rem;
+    letter-spacing: 0.1rem;
+}
+
+.back-btn {
+    width: 44px;
+    height: 44px;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 1.2rem;
+    color: var(--black);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.back-btn:hover {
+    background: var(--orange);
+}
+
+/* Download sections */
+.download-section {
+    padding: 1rem;
+    border-bottom: 2px solid var(--dark-grey);
+}
+
+.download-section:last-of-type {
+    border-bottom: none;
+}
+
+.download-section h3 {
+    font-size: 0.9rem;
+    color: var(--black);
+    margin-bottom: 0.75rem;
+    letter-spacing: 0.05rem;
+}
+
+/* Form groups */
+.form-group {
+    margin-bottom: 0.5rem;
+}
+
+.form-group select {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 0.8rem;
+    background-color: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.form-group select:disabled {
+    background-color: var(--light-grey);
+    cursor: not-allowed;
+}
+
+/* Date picker */
+.date-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--black);
+    cursor: pointer;
+}
+
+.radio-label input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.date-picker input[type="date"] {
+    padding: 0.5rem;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 0.75rem;
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    background-color: var(--white);
+}
+
+.date-picker input[type="date"]:disabled {
+    background-color: var(--light-grey);
+    cursor: not-allowed;
+}
+
+/* Action buttons */
+.action-btn {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background-color: var(--orange);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    font-family: 'Audiowide', sans-serif;
+    font-size: 0.9rem;
+    color: var(--black);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.action-btn:hover {
+    background-color: var(--yellow);
+}
+
+.action-btn:active {
+    transform: translateY(2px);
+}
+
+.action-btn:disabled {
+    background-color: var(--light-grey);
+    cursor: not-allowed;
+}
+
+/* Record button in mini-controls */
+#btn-record {
+    background: linear-gradient(180deg, var(--red) 0%, #b00 100%);
+    border-color: var(--red);
+}
+
+#btn-record:hover {
+    background: linear-gradient(180deg, #ff3333 0%, var(--red) 100%);
+}
+
+#btn-record .record-icon {
+    font-size: 1.1rem;
+}
+
+/* Status list */
+.status-list {
+    margin-top: 1rem;
+}
+
+.status-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.status-item .status-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.status-item .status-show {
+    font-size: 0.8rem;
+    color: var(--black);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.status-item .status-date {
+    font-size: 0.7rem;
+    color: var(--dark-grey);
+    margin-top: 0.15rem;
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.6rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.status-badge.pending {
+    background: var(--light-grey);
+    color: var(--white);
+}
+
+.status-badge.downloading {
+    background: var(--blue);
+    color: var(--black);
+}
+
+.status-badge.completed {
+    background: #4a4;
+    color: var(--white);
+}
+
+.status-badge.failed {
+    background: var(--red);
+    color: var(--white);
+}
+
+/* Schedules list */
+.schedules-list {
+    margin-top: 1rem;
+}
+
+.schedule-card {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.schedule-card .schedule-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.schedule-card .schedule-show {
+    font-size: 0.85rem;
+    color: var(--black);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.schedule-card .schedule-cron {
+    font-size: 0.7rem;
+    color: var(--dark-grey);
+    margin-top: 0.15rem;
+}
+
+.schedule-card .schedule-times {
+    font-size: 0.65rem;
+    color: var(--light-grey);
+    margin-top: 0.1rem;
+}
+
+.schedule-delete {
+    width: 36px;
+    height: 36px;
+    min-width: 44px;
+    min-height: 44px;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--red);
+    flex-shrink: 0;
+    margin-left: 0.5rem;
+}
+
+.schedule-delete:hover {
+    background: var(--red);
+    color: var(--white);
+}

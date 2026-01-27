@@ -11,42 +11,98 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <h1><a href="/">TAPEDECK</a></h1>
-        <div class="header-right">
-            <button id="about-btn" class="header-btn" title="About Tapedeck">About</button>
-            <button id="debug-toggle" class="debug-toggle" title="Toggle debug mode">DBG</button>
-        </div>
-    </header>
+    <!-- Main View (Player) -->
+    <div id="main-view">
+        <header>
+            <h1><a href="/">TAPEDECK</a></h1>
+            <div class="header-right">
+                <button id="about-btn" class="header-btn" title="About Tapedeck">About</button>
+                <button id="debug-toggle" class="debug-toggle" title="Toggle debug mode">DBG</button>
+            </div>
+        </header>
 
-    <div class="selector-row">
-        <select id="station-select">
-            <option value="">Station...</option>
-        </select>
+        <div class="selector-row">
+            <select id="station-select">
+                <option value="">Station...</option>
+            </select>
+        </div>
+
+        <div class="selector-row">
+            <select id="show-select" disabled>
+                <option value="">Select show...</option>
+            </select>
+        </div>
+
+        <!-- About Modal Overlay -->
+        <div id="about-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button id="modal-close" class="modal-close">&times;</button>
+                <h2>About Tapedeck</h2>
+                <p>Tapedeck is a personal radio archive player for listening to saved broadcasts from your favorite stations.</p>
+                <p>Select a station and show to browse available recordings, then tap a tape to start playing.</p>
+                <p>Use the download button to save recordings for offline listening.</p>
+            </div>
+        </div>
+
+        <main>
+            <div id="tape-list" class="tape-list">
+                <p class="empty-message">Select a station and show to view downloads</p>
+            </div>
+        </main>
     </div>
 
-    <div class="selector-row">
-        <select id="show-select" disabled>
-            <option value="">Select show...</option>
-        </select>
-    </div>
-
-    <!-- About Modal Overlay -->
-    <div id="about-modal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <button id="modal-close" class="modal-close">&times;</button>
-            <h2>About Tapedeck</h2>
-            <p>Tapedeck is a personal radio archive player for listening to saved broadcasts from your favorite stations.</p>
-            <p>Select a station and show to browse available recordings, then tap a tape to start playing.</p>
-            <p>Use the download button to save recordings for offline listening.</p>
+    <!-- Downloads View -->
+    <div id="downloads-view" class="hidden">
+        <div class="downloads-header">
+            <button id="back-btn" class="back-btn">&lt;</button>
+            <h2>DOWNLOADS</h2>
         </div>
-    </div>
 
-    <main>
-        <div id="tape-list" class="tape-list">
-            <p class="empty-message">Select a station and show to view downloads</p>
-        </div>
-    </main>
+        <!-- Section 4a: Ad-hoc Downloads -->
+        <section class="download-section">
+            <h3>DOWNLOAD EPISODE</h3>
+            <div class="form-group">
+                <select id="dl-station-select">
+                    <option value="">Station...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <select id="dl-show-select" disabled>
+                    <option value="">Select show...</option>
+                </select>
+            </div>
+            <div class="date-picker">
+                <label class="radio-label">
+                    <input type="radio" name="date-mode" value="latest" checked>
+                    <span>Latest</span>
+                </label>
+                <label class="radio-label">
+                    <input type="radio" name="date-mode" value="pick">
+                    <span>Pick date</span>
+                </label>
+                <input type="date" id="dl-date" disabled>
+            </div>
+            <button id="download-btn" class="action-btn">DOWNLOAD</button>
+            <div id="download-status-list" class="status-list"></div>
+        </section>
+
+        <!-- Section 4b: Scheduled Downloads -->
+        <section class="download-section">
+            <h3>SCHEDULED DOWNLOADS</h3>
+            <div class="form-group">
+                <select id="sched-station-select">
+                    <option value="">Station...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <select id="sched-show-select" disabled>
+                    <option value="">Select show...</option>
+                </select>
+            </div>
+            <button id="schedule-btn" class="action-btn">SCHEDULE</button>
+            <div id="schedules-list" class="schedules-list"></div>
+        </section>
+    </div>
 
     <div class="mini-player">
         <div class="mini-tape">
@@ -79,6 +135,9 @@
             </button>
             <button id="btn-next" title="Next">
                 <span class="icon">&gt;&gt;|</span>
+            </button>
+            <button id="btn-record" title="Downloads">
+                <span class="icon record-icon">&#9679;</span>
             </button>
         </div>
     </div>
