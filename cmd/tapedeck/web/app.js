@@ -471,7 +471,7 @@ function updateNowPlaying() {
 
 function updatePlayButton() {
     const icon = btnPlay.querySelector('.icon');
-    icon.innerHTML = state.isPlaying ? '&#9616;&#9616;' : '&#9654;';
+    icon.innerHTML = state.isPlaying ? '&#9616;&#9616;' : '&#9654;&#xFE0E;';
 }
 
 async function togglePlay() {
