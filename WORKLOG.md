@@ -101,7 +101,10 @@ DONE: Improve deployment speed.
     - Cross-compile Go binaries locally (CGO_ENABLED=0 for Alpine compatibility)
     - Deploy pre-built binaries instead of building on server
     - Reduced deploy time from ~2 minutes to ~10 seconds
-TODO: selected download is not decorated consistently on IOS.
+DONE: Fix selected download decoration inconsistency on iOS.
+    - Hover effects (shadow/slide) now only apply on devices with hover capability
+    - Uses @media (hover: hover) to prevent sticky hover state on touch devices
+    - Active class explicitly resets transform/box-shadow for clean state
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Review all test cases and test coverage.
