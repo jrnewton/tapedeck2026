@@ -104,6 +104,26 @@ func TestDownloadShow_UnknownStation(t *testing.T) {
 	}
 }
 
+func TestDeleteSchedule_MissingID(t *testing.T) {
+	err := cmdDeleteSchedule([]string{})
+	if err == nil {
+		t.Error("expected error for missing ID")
+	}
+	if err.Error() != "usage: delete-schedule <ID>" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestDeleteSchedule_InvalidID(t *testing.T) {
+	err := cmdDeleteSchedule([]string{"abc"})
+	if err == nil {
+		t.Error("expected error for invalid ID")
+	}
+	if err.Error() != "invalid schedule ID: abc" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 func TestServerURLFromEnv(t *testing.T) {
 	// Test default
 	os.Unsetenv("TAPEDECK_SERVER_URL")

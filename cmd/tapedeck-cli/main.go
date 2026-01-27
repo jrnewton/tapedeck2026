@@ -48,6 +48,8 @@ func main() {
 		err = cmdScheduleDownload(args)
 	case "list-schedules":
 		err = cmdListSchedules(args)
+	case "delete-schedule":
+		err = cmdDeleteSchedule(args)
 	case "fix-downloads":
 		err = cmdFixDownloads(args)
 	case "help", "-h", "--help":
@@ -77,6 +79,7 @@ Commands:
   download-status [ID]                         Show download status (all pending if no ID)
   schedule-download <STATION> <SHOW> [options] Create scheduled download on server
   list-schedules                               List all scheduled downloads
+  delete-schedule <ID>                         Delete a scheduled download
 
 Options for download-show:
   --latest            Download the most recent archive (default)
@@ -103,7 +106,8 @@ Examples:
   tapedeck-cli schedule-download WMBR Backwoods
   tapedeck-cli schedule-download WMBR Backwoods --cron-only
   TAPEDECK_SERVER_URL=http://host:8080 tapedeck-cli schedule-download WMBR Backwoods
-  tapedeck-cli list-schedules`)
+  tapedeck-cli list-schedules
+  tapedeck-cli delete-schedule 1`)
 }
 
 func cmdListShows(args []string) error {
@@ -778,6 +782,70 @@ func cmdListSchedules(_ []string) error {
 		fmt.Println()
 	}
 
+	return nil
+}
+
+func cmdDeleteSchedule(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: delete-schedule <ID>")
+	}
+
+	id, err := strconv.ParseInt(args[0], 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid schedule ID: %s", args[0])
+	}
+
+	serverURL := os.Getenv("TAPEDECK_SERVER_URL")
+	if serverURL == "" {
+		serverURL = "http://localhost:8080"
+	}
+
+	// First get schedule details for confirmation message
+	resp, err := http.Get(fmt.Sprintf("%s/api/schedules/%d", serverURL, id))
+	if err != nil {
+		return fmt.Errorf("cannot connect to server at %s. Is the server running?", serverURL)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("schedule not found: %d", id)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var schedule struct {
+		Station string `json:"Station"`
+		Show    string `json:"Show"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&schedule); err != nil {
+		return fmt.Errorf("parse response: %w", err)
+	}
+
+	// Delete via API
+	req, err := http.NewRequest("DELETE", fmt.Sprintf("%s/api/schedules/%d", serverURL, id), nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("delete request: %w", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("schedule not found: %d", id)
+	}
+
+	if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp2.Body)
+		return fmt.Errorf("server error (%d): %s", resp2.StatusCode, string(body))
+	}
+
+	fmt.Printf("Deleted schedule #%d (%s - %s)\n", id, schedule.Station, schedule.Show)
 	return nil
 }
 
