@@ -78,7 +78,7 @@ Commands:
   download-show <STATION> <SHOW> [options]     Queue archive download (returns ID)
   download-status [ID]                         Show download status (all pending if no ID)
   schedule-download <STATION> <SHOW> [options] Create scheduled download on server
-  list-schedules                               List all scheduled downloads
+  list-schedules [STATION]                     List all scheduled downloads
   delete-schedule <ID>                         Delete a scheduled download
 
 Options for download-show:
@@ -107,6 +107,7 @@ Examples:
   tapedeck-cli schedule-download WMBR Backwoods --cron-only
   TAPEDECK_SERVER_URL=http://host:8080 tapedeck-cli schedule-download WMBR Backwoods
   tapedeck-cli list-schedules
+  tapedeck-cli list-schedules WMBR
   tapedeck-cli delete-schedule 1`)
 }
 
@@ -716,7 +717,18 @@ func describeCron(cron string) string {
 	return fmt.Sprintf("%s at %s", dayStr, timeStr)
 }
 
-func cmdListSchedules(_ []string) error {
+func cmdListSchedules(args []string) error {
+	var callSign string
+	if len(args) > 0 {
+		callSign = strings.ToUpper(args[0])
+
+		// Validate station exists
+		_, err := tapedeck.GetAdapter(callSign)
+		if err != nil {
+			return fmt.Errorf("unknown station: %s", callSign)
+		}
+	}
+
 	serverURL := os.Getenv("TAPEDECK_SERVER_URL")
 	if serverURL == "" {
 		serverURL = "http://localhost:8080"
@@ -750,13 +762,34 @@ func cmdListSchedules(_ []string) error {
 		return fmt.Errorf("parse response: %w", err)
 	}
 
-	if len(result.Schedules) == 0 {
-		fmt.Println("No schedules configured.")
+	// Filter by station if specified
+	var schedules []struct {
+		ID             int64      `json:"ID"`
+		Station        string     `json:"Station"`
+		Show           string     `json:"Show"`
+		CronExpression string     `json:"CronExpression"`
+		Enabled        bool       `json:"Enabled"`
+		LastRunAt      *time.Time `json:"LastRunAt"`
+		LastStatus     string     `json:"LastStatus"`
+		NextRunAt      *time.Time `json:"NextRunAt"`
+	}
+	for _, s := range result.Schedules {
+		if callSign == "" || s.Station == callSign {
+			schedules = append(schedules, s)
+		}
+	}
+
+	if len(schedules) == 0 {
+		if callSign != "" {
+			fmt.Printf("No schedules found for station %s\n", callSign)
+		} else {
+			fmt.Println("No schedules configured.")
+		}
 		return nil
 	}
 
 	// Print each schedule
-	for _, s := range result.Schedules {
+	for _, s := range schedules {
 		lastRun := "(never)"
 		if s.LastRunAt != nil {
 			lastRun = s.LastRunAt.Local().Format("2006-01-02 15:04")

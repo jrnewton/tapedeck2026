@@ -104,6 +104,16 @@ func TestDownloadShow_UnknownStation(t *testing.T) {
 	}
 }
 
+func TestListSchedules_UnknownStation(t *testing.T) {
+	err := cmdListSchedules([]string{"XKJF"})
+	if err == nil {
+		t.Error("expected error for unknown station")
+	}
+	if err.Error() != "unknown station: XKJF" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 func TestDeleteSchedule_MissingID(t *testing.T) {
 	err := cmdDeleteSchedule([]string{})
 	if err == nil {
