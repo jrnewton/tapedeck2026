@@ -82,7 +82,9 @@ func TestListShows(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1", "Show2", "Show3"})
+	database.InsertShow(station.ID, "Show1")
+	database.InsertShow(station.ID, "Show2")
+	database.InsertShow(station.ID, "Show3")
 	show1, _ := database.GetShowByName(station.ID, "Show1")
 	show2, _ := database.GetShowByName(station.ID, "Show2")
 	// Show3 has no downloads, so it should not appear
@@ -144,7 +146,7 @@ func TestListDownloads(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1"})
+	database.InsertShow(station.ID, "Show1")
 	show, _ := database.GetShowByName(station.ID, "Show1")
 	database.InsertDownload(&db.Download{
 		StationID:   station.ID,
@@ -179,7 +181,7 @@ func TestListDownloads_FilterByStatus(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1"})
+	database.InsertShow(station.ID, "Show1")
 	show, _ := database.GetShowByName(station.ID, "Show1")
 
 	id1, _ := database.InsertDownload(&db.Download{
@@ -222,7 +224,7 @@ func TestGetDownload(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1"})
+	database.InsertShow(station.ID, "Show1")
 	show, _ := database.GetShowByName(station.ID, "Show1")
 	id, _ := database.InsertDownload(&db.Download{
 		StationID:   station.ID,
@@ -264,7 +266,8 @@ func TestListShowDownloads(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1", "Show2"})
+	database.InsertShow(station.ID, "Show1")
+	database.InsertShow(station.ID, "Show2")
 	show1, _ := database.GetShowByName(station.ID, "Show1")
 	show2, _ := database.GetShowByName(station.ID, "Show2")
 
@@ -315,7 +318,7 @@ func TestStreamAudio(t *testing.T) {
 	}
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1"})
+	database.InsertShow(station.ID, "Show1")
 	show, _ := database.GetShowByName(station.ID, "Show1")
 	id, _ := database.InsertDownload(&db.Download{
 		StationID:   station.ID,
@@ -347,7 +350,7 @@ func TestStreamAudio_NotCompleted(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1"})
+	database.InsertShow(station.ID, "Show1")
 	show, _ := database.GetShowByName(station.ID, "Show1")
 	database.InsertDownload(&db.Download{
 		StationID:   station.ID,
@@ -378,7 +381,7 @@ func TestStreamAudio_PathTraversal(t *testing.T) {
 	maliciousFilename := "../../etc/passwd"
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show1"})
+	database.InsertShow(station.ID, "Show1")
 	show, _ := database.GetShowByName(station.ID, "Show1")
 	id, _ := database.InsertDownload(&db.Download{
 		StationID:   station.ID,

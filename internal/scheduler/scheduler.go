@@ -171,16 +171,11 @@ func (s *Scheduler) runScheduledDownload(sched db.Schedule, isRetry bool) {
 		return
 	}
 
-	// Get latest archive from adapter (and cache it)
+	// Get latest archive from adapter
 	archive, err := adapter.GetLatestArchive(sched.Show)
 	if err != nil {
 		s.handleFailure(sched, err, isRetry)
 		return
-	}
-
-	// Cache archive data for future use
-	if err := s.db.UpdateShowArchive(sched.ShowID, archive.Date, archive.M3UURL); err != nil {
-		log.Printf("Scheduler: warning: could not cache archive for %s: %v", sched.Show, err)
 	}
 
 	// Check if already downloaded

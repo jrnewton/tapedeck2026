@@ -200,7 +200,7 @@ func TestAddSchedule(t *testing.T) {
 
 	// Create station and show
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Test Show"})
+	database.InsertShow(station.ID, "Test Show")
 	show, _ := database.GetShowByName(station.ID, "Test Show")
 
 	s := New(database, "/tmp/downloads", DefaultConfig())
@@ -239,7 +239,7 @@ func TestAddSchedule_InvalidCron(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Test Show"})
+	database.InsertShow(station.ID, "Test Show")
 	show, _ := database.GetShowByName(station.ID, "Test Show")
 
 	s := New(database, "/tmp/downloads", DefaultConfig())
@@ -259,7 +259,7 @@ func TestAddSchedule_Duplicate(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Test Show"})
+	database.InsertShow(station.ID, "Test Show")
 	show, _ := database.GetShowByName(station.ID, "Test Show")
 
 	s := New(database, "/tmp/downloads", DefaultConfig())
@@ -285,7 +285,8 @@ func TestListSchedules(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Show A", "Show B"})
+	database.InsertShow(station.ID, "Show A")
+	database.InsertShow(station.ID, "Show B")
 	showA, _ := database.GetShowByName(station.ID, "Show A")
 	showB, _ := database.GetShowByName(station.ID, "Show B")
 
@@ -321,7 +322,7 @@ func TestRemoveSchedule(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Test Show"})
+	database.InsertShow(station.ID, "Test Show")
 	show, _ := database.GetShowByName(station.ID, "Test Show")
 
 	s := New(database, "/tmp/downloads", DefaultConfig())
@@ -350,7 +351,7 @@ func TestSetEnabled(t *testing.T) {
 	defer database.Close()
 
 	station, _ := database.GetOrCreateStation("WMBR", "", "")
-	database.CacheShows(station.ID, []string{"Test Show"})
+	database.InsertShow(station.ID, "Test Show")
 	show, _ := database.GetShowByName(station.ID, "Test Show")
 
 	s := New(database, "/tmp/downloads", DefaultConfig())

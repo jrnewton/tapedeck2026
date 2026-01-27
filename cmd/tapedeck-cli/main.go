@@ -118,33 +118,7 @@ func cmdListShows(args []string) error {
 
 	callSign := strings.ToUpper(args[0])
 
-	database, err := openDB()
-	if err != nil {
-		return err
-	}
-	defer database.Close()
-
-	// Get or create station
-	station, err := database.GetOrCreateStation(callSign, "", "")
-	if err != nil {
-		return err
-	}
-
-	// Check cache first
-	cachedShows, valid, err := database.GetCachedShows(station.ID)
-	if err != nil {
-		return err
-	}
-
-	if valid && len(cachedShows) > 0 {
-		fmt.Printf("Shows available on %s (%d) [cached]:\n", callSign, len(cachedShows))
-		for _, show := range cachedShows {
-			fmt.Printf("  %s\n", show.Name)
-		}
-		return nil
-	}
-
-	// Fetch from adapter
+	// Fetch from adapter (always live, no caching)
 	adapter, err := tapedeck.GetAdapter(callSign)
 	if err != nil {
 		return err
@@ -153,11 +127,6 @@ func cmdListShows(args []string) error {
 	shows, err := adapter.ListShows()
 	if err != nil {
 		return fmt.Errorf("list shows: %w", err)
-	}
-
-	// Cache the results
-	if err := database.CacheShows(station.ID, shows); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: could not cache shows: %v\n", err)
 	}
 
 	fmt.Printf("Shows available on %s (%d):\n", callSign, len(shows))
@@ -312,21 +281,11 @@ func cmdDownloadShow(args []string) error {
 		return err
 	}
 
-	// Ensure shows are cached, then get show ID
+	// Get show ID if it exists in DB
 	var showID *int64
-	shows, valid, _ := database.GetCachedShows(station.ID)
-	if !valid || len(shows) == 0 {
-		// Cache shows from adapter
-		showNames, err := adapter.ListShows()
-		if err == nil {
-			database.CacheShows(station.ID, showNames)
-		}
-	}
 	show, err := database.GetShowByName(station.ID, archive.ShowName)
 	if err == nil && show != nil {
 		showID = &show.ID
-		// Cache archive data for future use
-		database.UpdateShowArchive(show.ID, archive.Date, archive.M3UURL)
 	}
 
 	// Check for existing download of same station/show/date
@@ -929,21 +888,10 @@ func cmdFixDownloads(_ []string) error {
 			continue
 		}
 
-		// Ensure shows are cached for this station
+		// Get station to find show
 		station, err := database.GetStation(d.Station)
 		if err != nil {
 			continue
-		}
-
-		shows, valid, _ := database.GetCachedShows(station.ID)
-		if !valid || len(shows) == 0 {
-			adapter, err := tapedeck.GetAdapter(d.Station)
-			if err == nil {
-				showNames, err := adapter.ListShows()
-				if err == nil {
-					database.CacheShows(station.ID, showNames)
-				}
-			}
 		}
 
 		// Find the show

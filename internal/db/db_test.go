@@ -115,7 +115,7 @@ func TestGetStation_NotFound(t *testing.T) {
 	}
 }
 
-func TestCacheShows(t *testing.T) {
+func TestGetShows(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
 		t.Fatalf("failed to open database: %v", err)
@@ -127,58 +127,19 @@ func TestCacheShows(t *testing.T) {
 		t.Fatalf("failed to create station: %v", err)
 	}
 
-	// Cache shows
-	shows := []string{"Lost and Found", "Backwoods", "Pipeline"}
-	err = db.CacheShows(station.ID, shows)
+	// Insert shows
+	db.InsertShow(station.ID, "Lost and Found")
+	db.InsertShow(station.ID, "Backwoods")
+	db.InsertShow(station.ID, "Pipeline")
+
+	// Get shows
+	shows, err := db.GetShows(station.ID)
 	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
+		t.Fatalf("failed to get shows: %v", err)
 	}
 
-	// Get cached shows
-	cached, valid, err := db.GetCachedShows(station.ID)
-	if err != nil {
-		t.Fatalf("failed to get cached shows: %v", err)
-	}
-
-	if !valid {
-		t.Error("expected cache to be valid")
-	}
-
-	if len(cached) != 3 {
-		t.Errorf("expected 3 shows, got %d", len(cached))
-	}
-}
-
-func TestCacheShows_Expiry(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	// Set very short TTL
-	db.CacheTTL = 1 * time.Millisecond
-
-	station, err := db.GetOrCreateStation("WMBR", "", "")
-	if err != nil {
-		t.Fatalf("failed to create station: %v", err)
-	}
-
-	err = db.CacheShows(station.ID, []string{"Show1"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
-
-	// Wait for cache to expire
-	time.Sleep(5 * time.Millisecond)
-
-	_, valid, err := db.GetCachedShows(station.ID)
-	if err != nil {
-		t.Fatalf("failed to get cached shows: %v", err)
-	}
-
-	if valid {
-		t.Error("expected cache to be expired")
+	if len(shows) != 3 {
+		t.Errorf("expected 3 shows, got %d", len(shows))
 	}
 }
 
@@ -194,10 +155,8 @@ func TestGetShowByName(t *testing.T) {
 		t.Fatalf("failed to create station: %v", err)
 	}
 
-	err = db.CacheShows(station.ID, []string{"Lost and Found", "Backwoods"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
+	db.InsertShow(station.ID, "Lost and Found")
+	db.InsertShow(station.ID, "Backwoods")
 
 	show, err := db.GetShowByName(station.ID, "Lost and Found")
 	if err != nil {
@@ -217,292 +176,6 @@ func TestGetShowByName(t *testing.T) {
 	}
 }
 
-func TestCacheShows_PreservesIDs(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	station, _ := db.GetOrCreateStation("WMBR", "", "")
-
-	// Initial cache
-	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
-
-	show1, _ := db.GetShowByName(station.ID, "Backwoods")
-	originalID := show1.ID
-
-	// Re-cache with same shows (simulating cache refresh)
-	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
-	if err != nil {
-		t.Fatalf("failed to re-cache shows: %v", err)
-	}
-
-	show2, _ := db.GetShowByName(station.ID, "Backwoods")
-
-	// ID should be preserved
-	if show2.ID != originalID {
-		t.Errorf("expected ID %d to be preserved, got %d", originalID, show2.ID)
-	}
-}
-
-func TestCacheShows_MarksInactive(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	station, _ := db.GetOrCreateStation("WMBR", "", "")
-
-	// Cache initial shows
-	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline", "OldShow"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
-
-	oldShow, _ := db.GetShowByName(station.ID, "OldShow")
-	oldShowID := oldShow.ID
-
-	// Re-cache without OldShow
-	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
-	if err != nil {
-		t.Fatalf("failed to re-cache shows: %v", err)
-	}
-
-	// GetCachedShows should only return active shows
-	cached, _, _ := db.GetCachedShows(station.ID)
-	if len(cached) != 2 {
-		t.Errorf("expected 2 active shows, got %d", len(cached))
-	}
-	for _, s := range cached {
-		if s.Name == "OldShow" {
-			t.Error("OldShow should not appear in active shows")
-		}
-	}
-
-	// But GetShowByName should still find the inactive show
-	oldShowAfter, _ := db.GetShowByName(station.ID, "OldShow")
-	if oldShowAfter == nil {
-		t.Fatal("expected to find inactive show by name")
-	}
-	if oldShowAfter.ID != oldShowID {
-		t.Errorf("expected ID %d, got %d", oldShowID, oldShowAfter.ID)
-	}
-	if oldShowAfter.Active {
-		t.Error("expected show to be inactive")
-	}
-}
-
-func TestCacheShows_PreservesForeignKeys(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	station, _ := db.GetOrCreateStation("WMBR", "", "")
-
-	// Cache shows
-	err = db.CacheShows(station.ID, []string{"Backwoods"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
-
-	show, _ := db.GetShowByName(station.ID, "Backwoods")
-	originalShowID := show.ID
-
-	// Create a download referencing the show
-	downloadID, err := db.InsertDownload(&Download{
-		StationID:   station.ID,
-		ShowID:      &show.ID,
-		ArchiveDate: time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC),
-		M3UURL:      "http://test.m3u",
-	})
-	if err != nil {
-		t.Fatalf("failed to insert download: %v", err)
-	}
-
-	// Create a schedule referencing the show
-	scheduleID, err := db.InsertSchedule(&Schedule{
-		StationID:      station.ID,
-		ShowID:         show.ID,
-		CronExpression: "30 4 * * 0",
-		Enabled:        true,
-	})
-	if err != nil {
-		t.Fatalf("failed to insert schedule: %v", err)
-	}
-
-	// Re-cache shows (simulating hourly refresh)
-	err = db.CacheShows(station.ID, []string{"Backwoods"})
-	if err != nil {
-		t.Fatalf("failed to re-cache shows: %v", err)
-	}
-
-	// Verify show ID is preserved
-	showAfter, _ := db.GetShowByName(station.ID, "Backwoods")
-	if showAfter.ID != originalShowID {
-		t.Errorf("show ID changed from %d to %d", originalShowID, showAfter.ID)
-	}
-
-	// Verify download still references the correct show
-	download, err := db.GetDownload(downloadID)
-	if err != nil {
-		t.Fatalf("failed to get download: %v", err)
-	}
-	if download.ShowID == nil || *download.ShowID != originalShowID {
-		t.Error("download show_id reference was corrupted")
-	}
-	if download.Show != "Backwoods" {
-		t.Errorf("expected show name 'Backwoods', got %q", download.Show)
-	}
-
-	// Verify schedule still references the correct show
-	schedule, err := db.GetSchedule(scheduleID)
-	if err != nil {
-		t.Fatalf("failed to get schedule: %v", err)
-	}
-	if schedule.ShowID != originalShowID {
-		t.Error("schedule show_id reference was corrupted")
-	}
-	if schedule.Show != "Backwoods" {
-		t.Errorf("expected show name 'Backwoods', got %q", schedule.Show)
-	}
-}
-
-func TestCacheShows_ReactivatesShow(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	station, _ := db.GetOrCreateStation("WMBR", "", "")
-
-	// Initial cache with show
-	db.CacheShows(station.ID, []string{"Backwoods"})
-	show, _ := db.GetShowByName(station.ID, "Backwoods")
-	originalID := show.ID
-
-	// Remove show (mark inactive)
-	db.CacheShows(station.ID, []string{"Pipeline"})
-	show, _ = db.GetShowByName(station.ID, "Backwoods")
-	if show.Active {
-		t.Error("expected show to be inactive after removal")
-	}
-
-	// Re-add show (should reactivate with same ID)
-	db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
-	show, _ = db.GetShowByName(station.ID, "Backwoods")
-
-	if show.ID != originalID {
-		t.Errorf("expected ID %d to be preserved, got %d", originalID, show.ID)
-	}
-	if !show.Active {
-		t.Error("expected show to be reactivated")
-	}
-}
-
-func TestUpdateShowArchive(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
-	show, _ := db.GetShowByName(station.ID, "Test Show")
-
-	// Initially no archive data
-	if show.ArchiveCurrentDate != nil {
-		t.Error("expected nil archive date initially")
-	}
-
-	// Add first archive
-	date1 := time.Date(2026, 1, 18, 0, 0, 0, 0, time.UTC)
-	err = db.UpdateShowArchive(show.ID, date1, "https://wmbr.org/m3u/test1.m3u")
-	if err != nil {
-		t.Fatalf("failed to update archive: %v", err)
-	}
-
-	// Verify archive is stored
-	show, _ = db.GetShowByName(station.ID, "Test Show")
-	if show.ArchiveCurrentDate == nil {
-		t.Fatal("expected archive date to be set")
-	}
-	if !show.ArchiveCurrentDate.Equal(date1) {
-		t.Errorf("expected date %v, got %v", date1, *show.ArchiveCurrentDate)
-	}
-	if show.ArchiveCurrentM3UURL != "https://wmbr.org/m3u/test1.m3u" {
-		t.Errorf("expected m3u URL test1.m3u, got %s", show.ArchiveCurrentM3UURL)
-	}
-	if show.ArchivePreviousDate != nil {
-		t.Error("expected no previous archive yet")
-	}
-
-	// Add second archive (should rotate)
-	date2 := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
-	err = db.UpdateShowArchive(show.ID, date2, "https://wmbr.org/m3u/test2.m3u")
-	if err != nil {
-		t.Fatalf("failed to update archive: %v", err)
-	}
-
-	// Verify rotation happened
-	show, _ = db.GetShowByName(station.ID, "Test Show")
-	if !show.ArchiveCurrentDate.Equal(date2) {
-		t.Errorf("expected current date %v, got %v", date2, *show.ArchiveCurrentDate)
-	}
-	if show.ArchiveCurrentM3UURL != "https://wmbr.org/m3u/test2.m3u" {
-		t.Errorf("expected current m3u URL test2.m3u, got %s", show.ArchiveCurrentM3UURL)
-	}
-	if show.ArchivePreviousDate == nil {
-		t.Fatal("expected previous date to be set")
-	}
-	if !show.ArchivePreviousDate.Equal(date1) {
-		t.Errorf("expected previous date %v, got %v", date1, *show.ArchivePreviousDate)
-	}
-	if show.ArchivePreviousM3UURL != "https://wmbr.org/m3u/test1.m3u" {
-		t.Errorf("expected previous m3u URL test1.m3u, got %s", show.ArchivePreviousM3UURL)
-	}
-}
-
-func TestUpdateShowArchive_SameDate_NoOp(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
-	defer db.Close()
-
-	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
-	show, _ := db.GetShowByName(station.ID, "Test Show")
-
-	// Add first archive
-	date := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
-	db.UpdateShowArchive(show.ID, date, "https://wmbr.org/m3u/test.m3u")
-
-	// Add second archive with different URL but same date
-	date2 := time.Date(2026, 1, 18, 0, 0, 0, 0, time.UTC)
-	db.UpdateShowArchive(show.ID, date2, "https://wmbr.org/m3u/test2.m3u")
-
-	// Now call with same date again - should not rotate
-	db.UpdateShowArchive(show.ID, date2, "https://wmbr.org/m3u/test2_updated.m3u")
-
-	// Verify no rotation happened (previous should still be date)
-	show, _ = db.GetShowByName(station.ID, "Test Show")
-	if show.ArchivePreviousDate == nil {
-		t.Fatal("expected previous date to be set")
-	}
-	if !show.ArchivePreviousDate.Equal(date) {
-		t.Errorf("expected previous date to remain %v, got %v", date, *show.ArchivePreviousDate)
-	}
-}
-
 func TestInsertDownload(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
@@ -515,10 +188,7 @@ func TestInsertDownload(t *testing.T) {
 		t.Fatalf("failed to create station: %v", err)
 	}
 
-	err = db.CacheShows(station.ID, []string{"Lost and Found"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
+	db.InsertShow(station.ID, "Lost and Found")
 
 	show, err := db.GetShowByName(station.ID, "Lost and Found")
 	if err != nil {
@@ -563,8 +233,8 @@ func TestListDownloads(t *testing.T) {
 	wmbr, _ := db.GetOrCreateStation("WMBR", "", "")
 	whrb, _ := db.GetOrCreateStation("WHRB", "", "")
 
-	db.CacheShows(wmbr.ID, []string{"Show1"})
-	db.CacheShows(whrb.ID, []string{"Show2"})
+	db.InsertShow(wmbr.ID, "Show1")
+	db.InsertShow(whrb.ID, "Show2")
 
 	show1, _ := db.GetShowByName(wmbr.ID, "Show1")
 	show2, _ := db.GetShowByName(whrb.ID, "Show2")
@@ -607,7 +277,7 @@ func TestUpdateDownloadStatus(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show1"})
+	db.InsertShow(station.ID, "Show1")
 	show, _ := db.GetShowByName(station.ID, "Show1")
 
 	// Insert pending download
@@ -655,7 +325,7 @@ func TestUpdateDownloadStatus_Failed(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show1"})
+	db.InsertShow(station.ID, "Show1")
 	show, _ := db.GetShowByName(station.ID, "Show1")
 
 	id, _ := db.InsertDownload(&Download{
@@ -688,7 +358,7 @@ func TestListDownloadsByStatus(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show1"})
+	db.InsertShow(station.ID, "Show1")
 	show, _ := db.GetShowByName(station.ID, "Show1")
 
 	// Insert downloads with different statuses
@@ -751,7 +421,7 @@ func TestFindDownload(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show1"})
+	db.InsertShow(station.ID, "Show1")
 	show, _ := db.GetShowByName(station.ID, "Show1")
 
 	archiveDate := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
@@ -794,7 +464,8 @@ func TestFindDownload_DifferentShowsSameDate(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Backwoods", "Aural Fixation"})
+	db.InsertShow(station.ID, "Backwoods")
+	db.InsertShow(station.ID, "Aural Fixation")
 	show1, _ := db.GetShowByName(station.ID, "Backwoods")
 	show2, _ := db.GetShowByName(station.ID, "Aural Fixation")
 
@@ -880,7 +551,7 @@ func TestFindDownload_NilShowID(t *testing.T) {
 	}
 
 	// Searching with a specific showID should NOT find the nil record
-	db.CacheShows(station.ID, []string{"SomeShow"})
+	db.InsertShow(station.ID, "SomeShow")
 	show, _ := db.GetShowByName(station.ID, "SomeShow")
 	found, err = db.FindDownload(station.ID, &show.ID, archiveDate)
 	if err != nil {
@@ -899,7 +570,9 @@ func TestListShowsWithDownloads(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show1", "Show2", "Show3"})
+	db.InsertShow(station.ID, "Show1")
+	db.InsertShow(station.ID, "Show2")
+	db.InsertShow(station.ID, "Show3")
 	show1, _ := db.GetShowByName(station.ID, "Show1")
 	show2, _ := db.GetShowByName(station.ID, "Show2")
 	// show3 has no downloads
@@ -933,7 +606,8 @@ func TestListDownloadsByShowID(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show1", "Show2"})
+	db.InsertShow(station.ID, "Show1")
+	db.InsertShow(station.ID, "Show2")
 	show1, _ := db.GetShowByName(station.ID, "Show1")
 	show2, _ := db.GetShowByName(station.ID, "Show2")
 
@@ -991,7 +665,7 @@ func TestInsertSchedule(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
+	db.InsertShow(station.ID, "Test Show")
 	show, _ := db.GetShowByName(station.ID, "Test Show")
 
 	nextRun := time.Date(2026, 2, 2, 4, 30, 0, 0, time.UTC)
@@ -1039,7 +713,8 @@ func TestListSchedules(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show A", "Show B"})
+	db.InsertShow(station.ID, "Show A")
+	db.InsertShow(station.ID, "Show B")
 	showA, _ := db.GetShowByName(station.ID, "Show A")
 	showB, _ := db.GetShowByName(station.ID, "Show B")
 
@@ -1073,7 +748,7 @@ func TestScheduleUniqueConstraint(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
+	db.InsertShow(station.ID, "Test Show")
 	show, _ := db.GetShowByName(station.ID, "Test Show")
 
 	// Insert first schedule
@@ -1097,7 +772,7 @@ func TestUpdateScheduleStatus(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
+	db.InsertShow(station.ID, "Test Show")
 	show, _ := db.GetShowByName(station.ID, "Test Show")
 
 	nextRun := time.Date(2026, 2, 2, 4, 30, 0, 0, time.UTC)
@@ -1136,7 +811,7 @@ func TestUpdateScheduleStatus_Retry(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
+	db.InsertShow(station.ID, "Test Show")
 	show, _ := db.GetShowByName(station.ID, "Test Show")
 
 	nextRun := time.Date(2026, 2, 2, 4, 30, 0, 0, time.UTC)
@@ -1178,7 +853,7 @@ func TestUpdateScheduleEnabled(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
+	db.InsertShow(station.ID, "Test Show")
 	show, _ := db.GetShowByName(station.ID, "Test Show")
 
 	id, _ := db.InsertSchedule(&Schedule{
@@ -1219,7 +894,7 @@ func TestDeleteSchedule(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Test Show"})
+	db.InsertShow(station.ID, "Test Show")
 	show, _ := db.GetShowByName(station.ID, "Test Show")
 
 	id, _ := db.InsertSchedule(&Schedule{
@@ -1249,7 +924,9 @@ func TestListDueSchedules(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show A", "Show B", "Show C"})
+	db.InsertShow(station.ID, "Show A")
+	db.InsertShow(station.ID, "Show B")
+	db.InsertShow(station.ID, "Show C")
 	showA, _ := db.GetShowByName(station.ID, "Show A")
 	showB, _ := db.GetShowByName(station.ID, "Show B")
 	showC, _ := db.GetShowByName(station.ID, "Show C")
@@ -1286,7 +963,8 @@ func TestFindScheduleByShowID(t *testing.T) {
 	defer db.Close()
 
 	station, _ := db.GetOrCreateStation("WMBR", "", "")
-	db.CacheShows(station.ID, []string{"Show A", "Show B"})
+	db.InsertShow(station.ID, "Show A")
+	db.InsertShow(station.ID, "Show B")
 	showA, _ := db.GetShowByName(station.ID, "Show A")
 	showB, _ := db.GetShowByName(station.ID, "Show B")
 

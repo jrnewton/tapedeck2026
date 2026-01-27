@@ -9,9 +9,6 @@ import (
 	"zombiezen.com/go/sqlite/sqlitex"
 )
 
-// DefaultCacheTTL is the default cache time-to-live.
-const DefaultCacheTTL = 1 * time.Hour
-
 // Station represents a radio station.
 type Station struct {
 	ID         int64
@@ -90,8 +87,7 @@ type Schedule struct {
 
 // DB wraps a SQLite connection pool.
 type DB struct {
-	pool     *sqlitex.Pool
-	CacheTTL time.Duration
+	pool *sqlitex.Pool
 }
 
 // Open opens or creates a SQLite database at the given path.
@@ -109,7 +105,7 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
 
-	db := &DB{pool: pool, CacheTTL: DefaultCacheTTL}
+	db := &DB{pool: pool}
 	if err := db.migrate(); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
@@ -350,25 +346,21 @@ func (db *DB) GetStation(callSign string) (*Station, error) {
 	return station, nil
 }
 
-// GetCachedShows returns cached shows for a station if still valid.
+// GetShows returns active shows for a station.
 // Only returns active shows (shows currently available from the station).
-func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
+func (db *DB) GetShows(stationID int64) ([]Show, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 	defer db.pool.Put(conn)
 
 	var shows []Show
-	var oldestCache time.Time
 
 	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active, archive_current_date, archive_current_m3u_url, archive_previous_date, archive_previous_m3u_url FROM shows WHERE station_id = ? AND active = 1 ORDER BY name`, &sqlitex.ExecOptions{
 		Args: []any{stationID},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
-			if oldestCache.IsZero() || cachedAt.Before(oldestCache) {
-				oldestCache = cachedAt
-			}
 			show := Show{
 				ID:                    stmt.ColumnInt64(0),
 				StationID:             stmt.ColumnInt64(1),
@@ -393,16 +385,10 @@ func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 		},
 	})
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	if len(shows) == 0 {
-		return nil, false, nil
-	}
-
-	// Check if cache is still valid
-	valid := time.Since(oldestCache) < db.CacheTTL
-	return shows, valid, nil
+	return shows, nil
 }
 
 // ListShowsWithDownloads returns shows for a station that have at least one download.
@@ -451,45 +437,29 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 	return shows, err
 }
 
-// CacheShows caches shows for a station using UPSERT to preserve IDs.
-// Shows no longer returned by the adapter are marked inactive but not deleted,
-// preserving foreign key references in downloads and schedules.
-func (db *DB) CacheShows(stationID int64, showNames []string) error {
+// InsertShow inserts a new show record, returning the show ID.
+func (db *DB) InsertShow(stationID int64, name string) (int64, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer db.pool.Put(conn)
 
 	now := time.Now().Format(time.RFC3339)
 
-	// Mark all shows for this station as inactive
-	err = sqlitex.Execute(conn, `UPDATE shows SET active = 0 WHERE station_id = ?`, &sqlitex.ExecOptions{
-		Args: []any{stationID},
+	err = sqlitex.Execute(conn, `
+		INSERT INTO shows (station_id, name, cached_at, active)
+		VALUES (?, ?, ?, 1)
+		ON CONFLICT(station_id, name) DO UPDATE SET
+			cached_at = excluded.cached_at,
+			active = 1`, &sqlitex.ExecOptions{
+		Args: []any{stationID, name, now},
 	})
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	// Upsert each show (preserves existing IDs, marks as active)
-	for _, name := range showNames {
-		err = sqlitex.Execute(conn, `
-			INSERT INTO shows (station_id, name, cached_at, active)
-			VALUES (?, ?, ?, 1)
-			ON CONFLICT(station_id, name) DO UPDATE SET
-				cached_at = excluded.cached_at,
-				active = 1`, &sqlitex.ExecOptions{
-			Args: []any{stationID, name, now},
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	// Note: We intentionally do NOT delete inactive shows or their archives.
-	// Inactive shows may still have valid downloads and schedules referencing them.
-
-	return nil
+	return conn.LastInsertRowID(), nil
 }
 
 // GetShowByID gets a show by ID.
@@ -573,51 +543,6 @@ func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 		return nil, err
 	}
 	return show, nil
-}
-
-// UpdateShowArchive updates the archive columns for a show with rotation logic.
-// If date differs from current, rotates current → previous before updating.
-func (db *DB) UpdateShowArchive(showID int64, date time.Time, m3uURL string) error {
-	conn, err := db.pool.Take(context.Background())
-	if err != nil {
-		return err
-	}
-	defer db.pool.Put(conn)
-
-	// Read current archive date
-	var currentDate *time.Time
-	err = sqlitex.Execute(conn, `SELECT archive_current_date FROM shows WHERE id = ?`, &sqlitex.ExecOptions{
-		Args: []any{showID},
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			if stmt.ColumnType(0) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(0)); parseErr == nil {
-					currentDate = &d
-				}
-			}
-			return nil
-		},
-	})
-	if err != nil {
-		return err
-	}
-
-	dateStr := date.Format("2006-01-02")
-
-	// If current date is NULL or different from new date, rotate
-	if currentDate == nil || !date.Equal(*currentDate) {
-		err = sqlitex.Execute(conn, `
-			UPDATE shows SET
-				archive_previous_date = archive_current_date,
-				archive_previous_m3u_url = archive_current_m3u_url,
-				archive_current_date = ?,
-				archive_current_m3u_url = ?
-			WHERE id = ?`, &sqlitex.ExecOptions{
-			Args: []any{dateStr, m3uURL, showID},
-		})
-	}
-	// If date equals current date, no-op (already cached)
-
-	return err
 }
 
 // InsertDownload inserts a new download record.

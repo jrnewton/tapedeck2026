@@ -85,11 +85,9 @@ func setupTestServer(t *testing.T) (*httptest.Server, *db.DB, func()) {
 		t.Fatalf("failed to create station: %v", err)
 	}
 
-	// Cache shows
-	err = database.CacheShows(station.ID, []string{"Backwoods", "Lost Highway"})
-	if err != nil {
-		t.Fatalf("failed to cache shows: %v", err)
-	}
+	// Insert shows
+	database.InsertShow(station.ID, "Backwoods")
+	database.InsertShow(station.ID, "Lost Highway")
 
 	// Get show for download linking
 	show, err := database.GetShowByName(station.ID, "Backwoods")
