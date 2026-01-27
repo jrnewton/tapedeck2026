@@ -8,7 +8,13 @@ const state = {
     isPlaying: false,
     offlineIds: new Set(),      // tracks which downloads are saved offline
     downloadingIds: new Set(),  // tracks downloads in progress
-    debugMode: localStorage.getItem('debugMode') === 'true'
+    debugMode: localStorage.getItem('debugMode') === 'true',
+    // Downloads page state
+    currentPage: 'main',        // 'main' or 'downloads'
+    allShows: [],               // all shows from adapter (for downloads page)
+    schedules: [],              // scheduled downloads
+    downloadQueue: [],          // queued downloads status
+    pollInterval: null          // interval for polling download status
 };
 
 // Debug helpers - only log/alert when debug mode is enabled
@@ -76,9 +82,23 @@ function updateURL(params) {
 
 async function applyURLState() {
     const params = getURLParams();
+    const page = params.get('page');
     const station = params.get('station');
     const showId = params.get('show');
     const playId = params.get('play');
+
+    // Handle page switching from URL
+    if (page === 'downloads') {
+        showPage('downloads');
+        return;
+    }
+
+    // Ensure we're on main page
+    if (state.currentPage !== 'main') {
+        mainView.classList.remove('hidden');
+        downloadsView.classList.add('hidden');
+        state.currentPage = 'main';
+    }
 
     if (station) {
         stationSelect.value = station;
@@ -115,6 +135,21 @@ const rightReel = document.querySelector('.right-reel');
 const aboutBtn = document.getElementById('about-btn');
 const aboutModal = document.getElementById('about-modal');
 const modalClose = document.getElementById('modal-close');
+
+// Downloads page DOM elements
+const mainView = document.getElementById('main-view');
+const downloadsView = document.getElementById('downloads-view');
+const btnRecord = document.getElementById('btn-record');
+const backBtn = document.getElementById('back-btn');
+const dlStationSelect = document.getElementById('dl-station-select');
+const dlShowSelect = document.getElementById('dl-show-select');
+const dlDate = document.getElementById('dl-date');
+const downloadBtn = document.getElementById('download-btn');
+const downloadStatusList = document.getElementById('download-status-list');
+const schedStationSelect = document.getElementById('sched-station-select');
+const schedShowSelect = document.getElementById('sched-show-select');
+const scheduleBtn = document.getElementById('schedule-btn');
+const schedulesList = document.getElementById('schedules-list');
 
 // Initialize
 async function init() {
@@ -541,6 +576,375 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// =====================================================
+// Downloads Page Functions
+// =====================================================
+
+// Show/hide pages
+function showPage(page) {
+    state.currentPage = page;
+
+    if (page === 'downloads') {
+        mainView.classList.add('hidden');
+        downloadsView.classList.remove('hidden');
+        // Update URL
+        const params = getURLParams();
+        params.set('page', 'downloads');
+        updateURL(params);
+        // Start polling download status
+        startStatusPolling();
+        // Load data
+        loadDownloadsPageData();
+    } else {
+        downloadsView.classList.add('hidden');
+        mainView.classList.remove('hidden');
+        // Remove page param from URL
+        const params = getURLParams();
+        params.delete('page');
+        updateURL(params);
+        // Stop polling
+        stopStatusPolling();
+    }
+}
+
+// Load all data needed for downloads page
+async function loadDownloadsPageData() {
+    // Populate station selects with registered stations
+    await populateDownloadStations();
+    // Load schedules
+    await loadSchedules();
+    // Load current download queue status
+    await loadDownloadStatus();
+}
+
+// Populate station dropdowns on downloads page
+async function populateDownloadStations() {
+    // Use the same stations from main page
+    if (state.stations.length === 0) {
+        await loadStations();
+    }
+
+    // Populate both station selects
+    [dlStationSelect, schedStationSelect].forEach(select => {
+        select.innerHTML = '<option value="">Station...</option>';
+        state.stations.forEach(station => {
+            const option = document.createElement('option');
+            option.value = station.CallSign;
+            option.textContent = station.CallSign + (station.Name ? ` - ${station.Name}` : '');
+            select.appendChild(option);
+        });
+    });
+}
+
+// Load all shows for a station (from adapter, not just downloaded)
+async function loadAllShows(callSign) {
+    try {
+        const response = await fetch(`/api/stations/${callSign}/allshows`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        state.allShows = await response.json();
+        return state.allShows;
+    } catch (error) {
+        debugError('Failed to load all shows:', error);
+        state.allShows = [];
+        return [];
+    }
+}
+
+// Render shows dropdown with all shows
+function renderAllShowsDropdown(selectElement) {
+    selectElement.innerHTML = '<option value="">Select show...</option>';
+    selectElement.disabled = state.allShows.length === 0;
+
+    state.allShows.forEach(showName => {
+        const option = document.createElement('option');
+        option.value = showName;
+        option.textContent = showName;
+        selectElement.appendChild(option);
+    });
+}
+
+// Load download queue status
+async function loadDownloadStatus() {
+    try {
+        const response = await fetch('/api/downloads');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        state.downloadQueue = await response.json();
+        // Only show recent downloads (last 10)
+        state.downloadQueue = state.downloadQueue.slice(0, 10);
+        renderDownloadStatus();
+    } catch (error) {
+        debugError('Failed to load download status:', error);
+        state.downloadQueue = [];
+        renderDownloadStatus();
+    }
+}
+
+// Render download status list
+function renderDownloadStatus() {
+    downloadStatusList.innerHTML = '';
+
+    if (state.downloadQueue.length === 0) {
+        return;
+    }
+
+    state.downloadQueue.forEach(dl => {
+        const item = document.createElement('div');
+        item.className = 'status-item';
+
+        const statusInfo = document.createElement('div');
+        statusInfo.className = 'status-info';
+
+        const statusShow = document.createElement('div');
+        statusShow.className = 'status-show';
+        statusShow.textContent = `${dl.Station} - ${dl.Show}`;
+
+        const statusDate = document.createElement('div');
+        statusDate.className = 'status-date';
+        const date = new Date(dl.ArchiveDate);
+        statusDate.textContent = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            timeZone: 'UTC'
+        });
+
+        statusInfo.appendChild(statusShow);
+        statusInfo.appendChild(statusDate);
+
+        const badge = document.createElement('span');
+        badge.className = `status-badge ${dl.Status}`;
+        badge.textContent = dl.Status;
+
+        item.appendChild(statusInfo);
+        item.appendChild(badge);
+        downloadStatusList.appendChild(item);
+    });
+}
+
+// Queue a download
+async function queueDownload() {
+    const station = dlStationSelect.value;
+    const show = dlShowSelect.value;
+    const dateMode = document.querySelector('input[name="date-mode"]:checked').value;
+    const date = dateMode === 'latest' ? 'latest' : dlDate.value;
+
+    if (!station || !show) {
+        debugAlert('Please select a station and show');
+        return;
+    }
+
+    if (dateMode === 'pick' && !date) {
+        debugAlert('Please select a date');
+        return;
+    }
+
+    downloadBtn.disabled = true;
+    downloadBtn.textContent = 'QUEUING...';
+
+    try {
+        const response = await fetch('/api/downloads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ station, show, date })
+        });
+
+        if (response.status === 409) {
+            debugAlert('This episode is already downloaded or queued');
+        } else if (!response.ok) {
+            const error = await response.text();
+            debugAlert('Failed to queue download: ' + error);
+        } else {
+            debugLog('Download queued successfully');
+        }
+
+        // Refresh status
+        await loadDownloadStatus();
+    } catch (error) {
+        debugError('Failed to queue download:', error);
+        debugAlert('Failed to queue download: ' + error.message);
+    } finally {
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = 'DOWNLOAD';
+    }
+}
+
+// Load schedules
+async function loadSchedules() {
+    try {
+        const response = await fetch('/api/schedules');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        state.schedules = data.schedules || [];
+        renderSchedules();
+    } catch (error) {
+        debugError('Failed to load schedules:', error);
+        state.schedules = [];
+        renderSchedules();
+    }
+}
+
+// Render schedules list
+function renderSchedules() {
+    schedulesList.innerHTML = '';
+
+    if (state.schedules.length === 0) {
+        const emptyMsg = document.createElement('p');
+        emptyMsg.className = 'empty-message';
+        emptyMsg.textContent = 'No scheduled downloads';
+        schedulesList.appendChild(emptyMsg);
+        return;
+    }
+
+    state.schedules.forEach(sched => {
+        const card = document.createElement('div');
+        card.className = 'schedule-card';
+
+        const schedInfo = document.createElement('div');
+        schedInfo.className = 'schedule-info';
+
+        const schedShow = document.createElement('div');
+        schedShow.className = 'schedule-show';
+        schedShow.textContent = `${sched.Station} - ${sched.Show}`;
+
+        const schedCron = document.createElement('div');
+        schedCron.className = 'schedule-cron';
+        schedCron.textContent = formatCron(sched.CronExpression);
+
+        const schedTimes = document.createElement('div');
+        schedTimes.className = 'schedule-times';
+        const lastRun = sched.LastRunAt
+            ? new Date(sched.LastRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'Never';
+        const nextRun = sched.NextRunAt
+            ? new Date(sched.NextRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'N/A';
+        schedTimes.textContent = `Last: ${lastRun} · Next: ${nextRun}`;
+
+        schedInfo.appendChild(schedShow);
+        schedInfo.appendChild(schedCron);
+        schedInfo.appendChild(schedTimes);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'schedule-delete';
+        deleteBtn.title = 'Delete schedule';
+        deleteBtn.textContent = '\u00D7'; // ×
+        deleteBtn.addEventListener('click', () => deleteSchedule(sched.ID));
+
+        card.appendChild(schedInfo);
+        card.appendChild(deleteBtn);
+        schedulesList.appendChild(card);
+    });
+}
+
+// Format cron expression to human-readable
+function formatCron(cronExpr) {
+    if (!cronExpr) return 'Unknown schedule';
+
+    const parts = cronExpr.split(' ');
+    if (parts.length < 5) return cronExpr;
+
+    const [minute, hour, , , dayOfWeek] = parts;
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    let dayStr = 'Every day';
+    if (dayOfWeek !== '*') {
+        const dayNum = parseInt(dayOfWeek);
+        if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
+            dayStr = `Every ${days[dayNum]}`;
+        }
+    }
+
+    const hourStr = hour.padStart(2, '0');
+    const minStr = minute.padStart(2, '0');
+
+    return `${dayStr} ~${hourStr}:${minStr}`;
+}
+
+// Create a schedule
+async function createSchedule() {
+    const station = schedStationSelect.value;
+    const show = schedShowSelect.value;
+
+    if (!station || !show) {
+        debugAlert('Please select a station and show');
+        return;
+    }
+
+    scheduleBtn.disabled = true;
+    scheduleBtn.textContent = 'SCHEDULING...';
+
+    try {
+        const response = await fetch('/api/schedules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ station, show })
+        });
+
+        if (response.status === 409) {
+            debugAlert('A schedule already exists for this show');
+        } else if (!response.ok) {
+            const error = await response.text();
+            debugAlert('Failed to create schedule: ' + error);
+        } else {
+            debugLog('Schedule created successfully');
+        }
+
+        // Refresh schedules
+        await loadSchedules();
+    } catch (error) {
+        debugError('Failed to create schedule:', error);
+        debugAlert('Failed to create schedule: ' + error.message);
+    } finally {
+        scheduleBtn.disabled = false;
+        scheduleBtn.textContent = 'SCHEDULE';
+    }
+}
+
+// Delete a schedule
+async function deleteSchedule(id) {
+    try {
+        const response = await fetch(`/api/schedules/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            debugAlert('Failed to delete schedule: ' + error);
+        } else {
+            debugLog('Schedule deleted');
+        }
+
+        // Refresh schedules
+        await loadSchedules();
+    } catch (error) {
+        debugError('Failed to delete schedule:', error);
+        debugAlert('Failed to delete schedule: ' + error.message);
+    }
+}
+
+// Polling for download status updates
+function startStatusPolling() {
+    if (state.pollInterval) return;
+    state.pollInterval = setInterval(() => {
+        if (state.currentPage === 'downloads') {
+            loadDownloadStatus();
+        }
+    }, 5000);
+}
+
+function stopStatusPolling() {
+    if (state.pollInterval) {
+        clearInterval(state.pollInterval);
+        state.pollInterval = null;
+    }
+}
+
 // Event Listeners
 function setupEventListeners() {
     // Debug toggle
@@ -672,6 +1076,47 @@ function setupEventListeners() {
     window.addEventListener('popstate', async () => {
         await applyURLState();
     });
+
+    // Downloads page event listeners
+    btnRecord.addEventListener('click', () => showPage('downloads'));
+    backBtn.addEventListener('click', () => showPage('main'));
+
+    // Download section - station change loads all shows
+    dlStationSelect.addEventListener('change', async (e) => {
+        const callSign = e.target.value;
+        if (callSign) {
+            await loadAllShows(callSign);
+            renderAllShowsDropdown(dlShowSelect);
+        } else {
+            state.allShows = [];
+            dlShowSelect.innerHTML = '<option value="">Select show...</option>';
+            dlShowSelect.disabled = true;
+        }
+    });
+
+    // Schedule section - station change loads all shows
+    schedStationSelect.addEventListener('change', async (e) => {
+        const callSign = e.target.value;
+        if (callSign) {
+            await loadAllShows(callSign);
+            renderAllShowsDropdown(schedShowSelect);
+        } else {
+            state.allShows = [];
+            schedShowSelect.innerHTML = '<option value="">Select show...</option>';
+            schedShowSelect.disabled = true;
+        }
+    });
+
+    // Date picker radio buttons
+    document.querySelectorAll('input[name="date-mode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            dlDate.disabled = e.target.value === 'latest';
+        });
+    });
+
+    // Action buttons
+    downloadBtn.addEventListener('click', queueDownload);
+    scheduleBtn.addEventListener('click', createSchedule);
 }
 
 // Start the app
