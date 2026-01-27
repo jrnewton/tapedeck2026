@@ -11,18 +11,18 @@ Each item "xx)" will have a plan document that includes a mockup (if appropriate
 The CLI and server run in a Docker container which has no native ability to schedule download
 jobs, that is put on the CLI user to utilize the host OS (linux) cron system.
 
-1) The server will be changed to include native (Golang) scheduling system so that it can
+1) [DONE] The server will be changed to include native (Golang) scheduling system so that it can
 handle "schedule-download" CLI requests on its own.
 
 # CLI changes
-2) "tapedeck-cli schedule-download" will need to connect to the running server and make a
+2) [DONE] "tapedeck-cli schedule-download" will need to connect to the running server and make a
 request to schedule a download. The server will respond with status and perhaps an ID.
 
-3) A new CLI function "list-schedules" will be created to show all currently scheduled downloads,
+3) [DONE] A new CLI function "list-schedules" will be created to show all currently scheduled downloads,
 their last run, last status and next run.
 
 "tapedeck-cli download-show" should remain untouched, as it is a one-shot synchronous download
-function.
+function. [DONE - validation added for station/show params]
 
 7) A new CLI function "delete-schedule" will be created to remove a scheduled download by ID.
 
