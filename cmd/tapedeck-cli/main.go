@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -42,6 +46,8 @@ func main() {
 		err = cmdDownloadStatus(args)
 	case "schedule-download":
 		err = cmdScheduleDownload(args)
+	case "list-schedules":
+		err = cmdListSchedules(args)
 	case "fix-downloads":
 		err = cmdFixDownloads(args)
 	case "help", "-h", "--help":
@@ -69,12 +75,20 @@ Commands:
   list-downloads [STATION]                     List downloaded files from database
   download-show <STATION> <SHOW> [options]     Queue archive download (returns ID)
   download-status [ID]                         Show download status (all pending if no ID)
-  schedule-download <STATION> <SHOW>           Generate crontab line for automated downloads
+  schedule-download <STATION> <SHOW> [options] Create scheduled download on server
+  list-schedules                               List all scheduled downloads
 
 Options for download-show:
   --latest            Download the most recent archive (default)
   --date YYYYMMDD     Download archive from specific date
   --output DIR        Output directory (default: ./data/downloads)
+
+Options for schedule-download:
+  --cron-only         Output crontab line only (legacy mode, no server)
+
+Environment Variables:
+  TAPEDECK_SERVER_URL  Server URL (default: http://localhost:8080)
+  TAPEDECK_DATA_DIR    Data directory (default: ./data)
 
 Supported Stations:
   WMBR
@@ -85,7 +99,10 @@ Examples:
   tapedeck-cli download-status 42
   tapedeck-cli download-status
   tapedeck-cli list-downloads WMBR
-  tapedeck-cli schedule-download WMBR Backwoods`)
+  tapedeck-cli schedule-download WMBR Backwoods
+  tapedeck-cli schedule-download WMBR Backwoods --cron-only
+  TAPEDECK_SERVER_URL=http://host:8080 tapedeck-cli schedule-download WMBR Backwoods
+  tapedeck-cli list-schedules`)
 }
 
 func cmdListShows(args []string) error {
@@ -450,23 +467,109 @@ func openDB() (*db.DB, error) {
 }
 
 func cmdScheduleDownload(args []string) error {
-	if len(args) < 2 {
-		return fmt.Errorf("usage: schedule-download <STATION> <SHOW>")
+	// Manually extract --cron-only flag from any position
+	cronOnly := false
+	var positionalArgs []string
+	for _, arg := range args {
+		if arg == "--cron-only" || arg == "-cron-only" {
+			cronOnly = true
+		} else {
+			positionalArgs = append(positionalArgs, arg)
+		}
 	}
 
-	callSign := strings.ToUpper(args[0])
-	showName := args[1]
+	if len(positionalArgs) < 2 {
+		return fmt.Errorf("usage: schedule-download <STATION> <SHOW> [--cron-only]")
+	}
+
+	callSign := strings.ToUpper(positionalArgs[0])
+	showName := positionalArgs[1]
 
 	adapter, err := tapedeck.GetAdapter(callSign)
 	if err != nil {
 		return err
 	}
 
+	fmt.Printf("Analyzing broadcast history for %s...\n", showName)
+
 	schedule, err := adapter.GetShowSchedule(showName)
 	if err != nil {
 		return fmt.Errorf("get schedule: %w", err)
 	}
 
+	fmt.Printf("Detected schedule: %ss ~%s, archive available ~%s\n",
+		schedule.DayOfWeek, schedule.StartTime, formatCronTime(schedule.RecommendedCron))
+
+	if schedule.Confidence == "low" {
+		fmt.Printf("Warning: Low confidence schedule (few archives). Monitor for accuracy.\n")
+	}
+
+	// Legacy mode: output crontab line only
+	if cronOnly {
+		return outputCronLine(callSign, showName, schedule)
+	}
+
+	// Server mode: create schedule via API
+	serverURL := os.Getenv("TAPEDECK_SERVER_URL")
+	if serverURL == "" {
+		serverURL = "http://localhost:8080"
+	}
+
+	// Create schedule via API
+	payload := map[string]string{
+		"station": callSign,
+		"show":    showName,
+		"cron":    schedule.RecommendedCron,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+
+	resp, err := http.Post(serverURL+"/api/schedules", "application/json", bytes.NewReader(jsonData))
+	if err != nil {
+		return fmt.Errorf("cannot connect to server at %s. Is the server running?", serverURL)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode == http.StatusConflict {
+		return fmt.Errorf("schedule already exists for %s. Use list-schedules to view", showName)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("show '%s' not found for station %s. Run a download first to cache shows", showName, callSign)
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var result struct {
+		ID             int64     `json:"ID"`
+		CronExpression string    `json:"CronExpression"`
+		NextRunAt      time.Time `json:"NextRunAt"`
+		Station        string    `json:"Station"`
+		Show           string    `json:"Show"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return fmt.Errorf("parse response: %w", err)
+	}
+
+	fmt.Printf("Created schedule #%d: %s\n", result.ID, result.CronExpression)
+	if !result.NextRunAt.IsZero() {
+		fmt.Printf("Next run: %s\n", result.NextRunAt.Local().Format("2006-01-02 15:04:05"))
+	}
+
+	return nil
+}
+
+// outputCronLine outputs a crontab line for manual installation (legacy mode).
+func outputCronLine(callSign, showName string, schedule *tapedeck.Schedule) error {
 	// Format the show name for the crontab command
 	quotedShow := showName
 	if strings.Contains(showName, " ") {
@@ -478,7 +581,7 @@ func cmdScheduleDownload(args []string) error {
 		schedule.RecommendedCron, callSign, quotedShow)
 
 	// Output the crontab line with comments
-	fmt.Printf("# %s on %s\n", showName, callSign)
+	fmt.Printf("\n# %s on %s\n", showName, callSign)
 	fmt.Printf("# Airs: %s at %s\n", schedule.DayOfWeek, schedule.StartTime)
 	fmt.Printf("# Confidence: %s\n", schedule.Confidence)
 	if schedule.Notes != "" {
@@ -487,6 +590,98 @@ func cmdScheduleDownload(args []string) error {
 	fmt.Printf("%s\n", cronLine)
 	fmt.Printf("\n# To install:\n")
 	fmt.Printf("(crontab -l 2>/dev/null; echo '%s') | crontab -\n", cronLine)
+
+	return nil
+}
+
+// formatCronTime extracts HH:MM from a cron expression like "30 4 * * 0".
+func formatCronTime(cron string) string {
+	parts := strings.Fields(cron)
+	if len(parts) >= 2 {
+		min := parts[0]
+		hour := parts[1]
+		if len(min) == 1 {
+			min = "0" + min
+		}
+		if len(hour) == 1 {
+			hour = "0" + hour
+		}
+		return hour + ":" + min
+	}
+	return cron
+}
+
+func cmdListSchedules(_ []string) error {
+	serverURL := os.Getenv("TAPEDECK_SERVER_URL")
+	if serverURL == "" {
+		serverURL = "http://localhost:8080"
+	}
+
+	resp, err := http.Get(serverURL + "/api/schedules")
+	if err != nil {
+		return fmt.Errorf("cannot connect to server at %s. Is the server running?", serverURL)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Schedules []struct {
+			ID             int64      `json:"ID"`
+			Station        string     `json:"Station"`
+			Show           string     `json:"Show"`
+			CronExpression string     `json:"CronExpression"`
+			Enabled        bool       `json:"Enabled"`
+			LastRunAt      *time.Time `json:"LastRunAt"`
+			LastStatus     string     `json:"LastStatus"`
+			NextRunAt      *time.Time `json:"NextRunAt"`
+		} `json:"schedules"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("parse response: %w", err)
+	}
+
+	if len(result.Schedules) == 0 {
+		fmt.Println("No schedules configured.")
+		return nil
+	}
+
+	// Print table header
+	fmt.Printf("%-3s  %-7s  %-20s  %-12s  %-20s  %-8s  %-20s\n",
+		"ID", "Station", "Show", "Schedule", "Last Run", "Status", "Next Run")
+	fmt.Println(strings.Repeat("-", 95))
+
+	for _, s := range result.Schedules {
+		lastRun := "(never)"
+		if s.LastRunAt != nil {
+			lastRun = s.LastRunAt.Local().Format("2006-01-02 15:04")
+		}
+
+		status := "-"
+		if s.LastStatus != "" {
+			status = s.LastStatus
+		}
+		if !s.Enabled {
+			status = "disabled"
+		}
+
+		nextRun := "-"
+		if s.NextRunAt != nil {
+			nextRun = s.NextRunAt.Local().Format("2006-01-02 15:04")
+		}
+
+		showName := s.Show
+		if len(showName) > 20 {
+			showName = showName[:17] + "..."
+		}
+
+		fmt.Printf("%-3d  %-7s  %-20s  %-12s  %-20s  %-8s  %-20s\n",
+			s.ID, s.Station, showName, s.CronExpression, lastRun, status, nextRun)
+	}
 
 	return nil
 }
