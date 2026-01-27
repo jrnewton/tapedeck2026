@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"local/tapedeck/internal/db"
+
+	// Register WMBR adapter for allshows test
+	_ "local/tapedeck/internal/adapters/wmbr"
 )
 
 func setupTestServer(t *testing.T) (*Server, *db.DB) {
@@ -133,6 +136,51 @@ func TestListShows_NotFound(t *testing.T) {
 	server.RegisterRoutes(mux)
 
 	req := httptest.NewRequest("GET", "/api/stations/WXYZ/shows", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+}
+
+func TestListAllShows(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	// WMBR is registered in the adapter registry, so it should return show names
+	// Note: This makes a real HTTP request to WMBR's archive page
+	// In a production test suite, you would mock the HTTP client
+	req := httptest.NewRequest("GET", "/api/stations/WMBR/allshows", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var shows []string
+	if err := json.Unmarshal(w.Body.Bytes(), &shows); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	// Should return at least some shows
+	if len(shows) == 0 {
+		t.Error("expected at least some shows from WMBR")
+	}
+}
+
+func TestListAllShows_UnknownStation(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/stations/WXYZ/allshows", nil)
 	w := httptest.NewRecorder()
 	mux.ServeHTTP(w, req)
 

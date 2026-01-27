@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"local/tapedeck/internal/db"
+	"local/tapedeck/pkg/tapedeck"
 )
 
 // Scheduler interface for schedule management.
@@ -39,6 +40,7 @@ func NewServer(database *db.DB, downloadsDir string) *Server {
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/stations", s.handleListStations)
 	mux.HandleFunc("GET /api/stations/{call}/shows", s.handleListShows)
+	mux.HandleFunc("GET /api/stations/{call}/allshows", s.handleListAllShows)
 	mux.HandleFunc("GET /api/downloads", s.handleListDownloads)
 	mux.HandleFunc("GET /api/downloads/{id}", s.handleGetDownload)
 	mux.HandleFunc("GET /api/shows/{id}/downloads", s.handleListShowDownloads)
@@ -88,6 +90,34 @@ func (s *Server) handleListShows(w http.ResponseWriter, r *http.Request) {
 	// Ensure we return [] instead of null for empty results
 	if shows == nil {
 		shows = []db.Show{}
+	}
+
+	writeJSON(w, shows)
+}
+
+// handleListAllShows returns ALL shows from the station adapter (not just shows with downloads).
+func (s *Server) handleListAllShows(w http.ResponseWriter, r *http.Request) {
+	callSign := strings.ToUpper(r.PathValue("call"))
+	if callSign == "" {
+		http.Error(w, "station call sign required", http.StatusBadRequest)
+		return
+	}
+
+	adapter, err := tapedeck.GetAdapter(callSign)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	shows, err := adapter.ListShows()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Ensure we return [] instead of null for empty results
+	if shows == nil {
+		shows = []string{}
 	}
 
 	writeJSON(w, shows)
