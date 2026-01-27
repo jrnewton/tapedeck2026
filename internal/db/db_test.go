@@ -211,6 +211,200 @@ func TestGetShowByName(t *testing.T) {
 	if show.Name != "Lost and Found" {
 		t.Errorf("expected name 'Lost and Found', got %q", show.Name)
 	}
+
+	if !show.Active {
+		t.Error("expected show to be active")
+	}
+}
+
+func TestCacheShows_PreservesIDs(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+
+	// Initial cache
+	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
+	if err != nil {
+		t.Fatalf("failed to cache shows: %v", err)
+	}
+
+	show1, _ := db.GetShowByName(station.ID, "Backwoods")
+	originalID := show1.ID
+
+	// Re-cache with same shows (simulating cache refresh)
+	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
+	if err != nil {
+		t.Fatalf("failed to re-cache shows: %v", err)
+	}
+
+	show2, _ := db.GetShowByName(station.ID, "Backwoods")
+
+	// ID should be preserved
+	if show2.ID != originalID {
+		t.Errorf("expected ID %d to be preserved, got %d", originalID, show2.ID)
+	}
+}
+
+func TestCacheShows_MarksInactive(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+
+	// Cache initial shows
+	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline", "OldShow"})
+	if err != nil {
+		t.Fatalf("failed to cache shows: %v", err)
+	}
+
+	oldShow, _ := db.GetShowByName(station.ID, "OldShow")
+	oldShowID := oldShow.ID
+
+	// Re-cache without OldShow
+	err = db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
+	if err != nil {
+		t.Fatalf("failed to re-cache shows: %v", err)
+	}
+
+	// GetCachedShows should only return active shows
+	cached, _, _ := db.GetCachedShows(station.ID)
+	if len(cached) != 2 {
+		t.Errorf("expected 2 active shows, got %d", len(cached))
+	}
+	for _, s := range cached {
+		if s.Name == "OldShow" {
+			t.Error("OldShow should not appear in active shows")
+		}
+	}
+
+	// But GetShowByName should still find the inactive show
+	oldShowAfter, _ := db.GetShowByName(station.ID, "OldShow")
+	if oldShowAfter == nil {
+		t.Fatal("expected to find inactive show by name")
+	}
+	if oldShowAfter.ID != oldShowID {
+		t.Errorf("expected ID %d, got %d", oldShowID, oldShowAfter.ID)
+	}
+	if oldShowAfter.Active {
+		t.Error("expected show to be inactive")
+	}
+}
+
+func TestCacheShows_PreservesForeignKeys(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+
+	// Cache shows
+	err = db.CacheShows(station.ID, []string{"Backwoods"})
+	if err != nil {
+		t.Fatalf("failed to cache shows: %v", err)
+	}
+
+	show, _ := db.GetShowByName(station.ID, "Backwoods")
+	originalShowID := show.ID
+
+	// Create a download referencing the show
+	downloadID, err := db.InsertDownload(&Download{
+		StationID:   station.ID,
+		ShowID:      &show.ID,
+		ArchiveDate: time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC),
+		M3UURL:      "http://test.m3u",
+	})
+	if err != nil {
+		t.Fatalf("failed to insert download: %v", err)
+	}
+
+	// Create a schedule referencing the show
+	scheduleID, err := db.InsertSchedule(&Schedule{
+		StationID:      station.ID,
+		ShowID:         show.ID,
+		CronExpression: "30 4 * * 0",
+		Enabled:        true,
+	})
+	if err != nil {
+		t.Fatalf("failed to insert schedule: %v", err)
+	}
+
+	// Re-cache shows (simulating hourly refresh)
+	err = db.CacheShows(station.ID, []string{"Backwoods"})
+	if err != nil {
+		t.Fatalf("failed to re-cache shows: %v", err)
+	}
+
+	// Verify show ID is preserved
+	showAfter, _ := db.GetShowByName(station.ID, "Backwoods")
+	if showAfter.ID != originalShowID {
+		t.Errorf("show ID changed from %d to %d", originalShowID, showAfter.ID)
+	}
+
+	// Verify download still references the correct show
+	download, err := db.GetDownload(downloadID)
+	if err != nil {
+		t.Fatalf("failed to get download: %v", err)
+	}
+	if download.ShowID == nil || *download.ShowID != originalShowID {
+		t.Error("download show_id reference was corrupted")
+	}
+	if download.Show != "Backwoods" {
+		t.Errorf("expected show name 'Backwoods', got %q", download.Show)
+	}
+
+	// Verify schedule still references the correct show
+	schedule, err := db.GetSchedule(scheduleID)
+	if err != nil {
+		t.Fatalf("failed to get schedule: %v", err)
+	}
+	if schedule.ShowID != originalShowID {
+		t.Error("schedule show_id reference was corrupted")
+	}
+	if schedule.Show != "Backwoods" {
+		t.Errorf("expected show name 'Backwoods', got %q", schedule.Show)
+	}
+}
+
+func TestCacheShows_ReactivatesShow(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	station, _ := db.GetOrCreateStation("WMBR", "", "")
+
+	// Initial cache with show
+	db.CacheShows(station.ID, []string{"Backwoods"})
+	show, _ := db.GetShowByName(station.ID, "Backwoods")
+	originalID := show.ID
+
+	// Remove show (mark inactive)
+	db.CacheShows(station.ID, []string{"Pipeline"})
+	show, _ = db.GetShowByName(station.ID, "Backwoods")
+	if show.Active {
+		t.Error("expected show to be inactive after removal")
+	}
+
+	// Re-add show (should reactivate with same ID)
+	db.CacheShows(station.ID, []string{"Backwoods", "Pipeline"})
+	show, _ = db.GetShowByName(station.ID, "Backwoods")
+
+	if show.ID != originalID {
+		t.Errorf("expected ID %d to be preserved, got %d", originalID, show.ID)
+	}
+	if !show.Active {
+		t.Error("expected show to be reactivated")
+	}
 }
 
 func TestCacheArchives(t *testing.T) {

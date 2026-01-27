@@ -26,6 +26,7 @@ type Show struct {
 	StationID int64
 	Name      string
 	CachedAt  time.Time
+	Active    bool
 }
 
 // Archive represents a cached archive entry.
@@ -194,7 +195,29 @@ func (db *DB) migrate() error {
 		CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules(next_run_at);
 		CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
 	`
-	return sqlitex.ExecuteScript(conn, schema, nil)
+	if err := sqlitex.ExecuteScript(conn, schema, nil); err != nil {
+		return err
+	}
+
+	// Migration: add active column to shows if not exists
+	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we check first
+	var hasActive bool
+	err = sqlitex.Execute(conn, `SELECT 1 FROM pragma_table_info('shows') WHERE name='active'`, &sqlitex.ExecOptions{
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			hasActive = true
+			return nil
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !hasActive {
+		if err := sqlitex.Execute(conn, `ALTER TABLE shows ADD COLUMN active INTEGER NOT NULL DEFAULT 1`, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // ListStations returns all registered stations.
@@ -297,6 +320,7 @@ func (db *DB) GetStation(callSign string) (*Station, error) {
 }
 
 // GetCachedShows returns cached shows for a station if still valid.
+// Only returns active shows (shows currently available from the station).
 func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
@@ -307,7 +331,7 @@ func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 	var shows []Show
 	var oldestCache time.Time
 
-	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at FROM shows WHERE station_id = ? ORDER BY name`, &sqlitex.ExecOptions{
+	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active FROM shows WHERE station_id = ? AND active = 1 ORDER BY name`, &sqlitex.ExecOptions{
 		Args: []any{stationID},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
@@ -319,6 +343,7 @@ func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 				StationID: stmt.ColumnInt64(1),
 				Name:      stmt.ColumnText(2),
 				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			})
 			return nil
 		},
@@ -337,6 +362,7 @@ func (db *DB) GetCachedShows(stationID int64) ([]Show, bool, error) {
 }
 
 // ListShowsWithDownloads returns shows for a station that have at least one download.
+// Returns both active and inactive shows (inactive shows may still have valid downloads).
 func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
@@ -346,7 +372,7 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 
 	var shows []Show
 	err = sqlitex.Execute(conn, `
-		SELECT DISTINCT s.id, s.station_id, s.name, s.cached_at
+		SELECT DISTINCT s.id, s.station_id, s.name, s.cached_at, s.active
 		FROM shows s
 		INNER JOIN downloads d ON d.show_id = s.id
 		WHERE s.station_id = ?
@@ -359,6 +385,7 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 				StationID: stmt.ColumnInt64(1),
 				Name:      stmt.ColumnText(2),
 				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			})
 			return nil
 		},
@@ -366,7 +393,9 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 	return shows, err
 }
 
-// CacheShows caches shows for a station, clearing old entries first.
+// CacheShows caches shows for a station using UPSERT to preserve IDs.
+// Shows no longer returned by the adapter are marked inactive but not deleted,
+// preserving foreign key references in downloads and schedules.
 func (db *DB) CacheShows(stationID int64, showNames []string) error {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
@@ -376,25 +405,22 @@ func (db *DB) CacheShows(stationID int64, showNames []string) error {
 
 	now := time.Now().Format(time.RFC3339)
 
-	// Delete old archives for this station's shows
-	err = sqlitex.Execute(conn, `DELETE FROM archives WHERE show_id IN (SELECT id FROM shows WHERE station_id = ?)`, &sqlitex.ExecOptions{
+	// Mark all shows for this station as inactive
+	err = sqlitex.Execute(conn, `UPDATE shows SET active = 0 WHERE station_id = ?`, &sqlitex.ExecOptions{
 		Args: []any{stationID},
 	})
 	if err != nil {
 		return err
 	}
 
-	// Delete old shows
-	err = sqlitex.Execute(conn, `DELETE FROM shows WHERE station_id = ?`, &sqlitex.ExecOptions{
-		Args: []any{stationID},
-	})
-	if err != nil {
-		return err
-	}
-
-	// Insert new shows
+	// Upsert each show (preserves existing IDs, marks as active)
 	for _, name := range showNames {
-		err = sqlitex.Execute(conn, `INSERT INTO shows (station_id, name, cached_at) VALUES (?, ?, ?)`, &sqlitex.ExecOptions{
+		err = sqlitex.Execute(conn, `
+			INSERT INTO shows (station_id, name, cached_at, active)
+			VALUES (?, ?, ?, 1)
+			ON CONFLICT(station_id, name) DO UPDATE SET
+				cached_at = excluded.cached_at,
+				active = 1`, &sqlitex.ExecOptions{
 			Args: []any{stationID, name, now},
 		})
 		if err != nil {
@@ -402,10 +428,14 @@ func (db *DB) CacheShows(stationID int64, showNames []string) error {
 		}
 	}
 
+	// Note: We intentionally do NOT delete inactive shows or their archives.
+	// Inactive shows may still have valid downloads and schedules referencing them.
+
 	return nil
 }
 
 // GetShowByName gets a show by station ID and name.
+// Returns the show regardless of active status.
 func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 	conn, err := db.pool.Take(context.Background())
 	if err != nil {
@@ -414,7 +444,7 @@ func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 	defer db.pool.Put(conn)
 
 	var show *Show
-	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at FROM shows WHERE station_id = ? AND name = ?`, &sqlitex.ExecOptions{
+	err = sqlitex.Execute(conn, `SELECT id, station_id, name, cached_at, active FROM shows WHERE station_id = ? AND name = ?`, &sqlitex.ExecOptions{
 		Args: []any{stationID, name},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
@@ -423,6 +453,7 @@ func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 				StationID: stmt.ColumnInt64(1),
 				Name:      stmt.ColumnText(2),
 				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			}
 			return nil
 		},
