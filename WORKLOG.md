@@ -105,6 +105,10 @@ DONE: Fix selected download decoration inconsistency on iOS.
     - Hover effects (shadow/slide) now only apply on devices with hover capability
     - Uses @media (hover: hover) to prevent sticky hover state on touch devices
     - Active class explicitly resets transform/box-shadow for clean state
+DONE: UI polish for iOS Safari.
+    - Tape spine accent color changed from red to original orange
+    - Audio player progress bar thumb changed from orange to neutral grey
+    - Play button icon fixed to render consistently with other transport buttons (text variation selector)
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Change scheduler implementation so user can schedule via GUI.
 TODO: Review all test cases and test coverage.
