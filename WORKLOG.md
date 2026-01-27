@@ -110,6 +110,7 @@ DONE: UI polish for iOS Safari.
     - Audio player progress bar thumb changed from orange to neutral grey
     - Play button icon fixed to render consistently with other transport buttons (text variation selector)
 TODO: Change scheduler implementation so user can schedule via GUI.
+TODO: implement PWA support on android - see pwa-requirements.md
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Review all test cases and test coverage.
 TODO: Implement backend CLI for WHRB
