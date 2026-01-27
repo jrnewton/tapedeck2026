@@ -105,6 +105,7 @@ Examples:
   tapedeck-cli list-downloads WMBR
   tapedeck-cli schedule-download WMBR Backwoods
   tapedeck-cli schedule-download WMBR Backwoods --cron-only
+  tapedeck-cli schedule-download WMBR Backwoods --dryrun
   TAPEDECK_SERVER_URL=http://host:8080 tapedeck-cli schedule-download WMBR Backwoods
   tapedeck-cli list-schedules
   tapedeck-cli list-schedules WMBR
