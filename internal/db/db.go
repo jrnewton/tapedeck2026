@@ -10,7 +10,7 @@ import (
 )
 
 // DefaultCacheTTL is the default cache time-to-live.
-const DefaultCacheTTL = 7 * 24 * time.Hour // 1 week
+const DefaultCacheTTL = 1 * time.Hour
 
 // Station represents a radio station.
 type Station struct {
