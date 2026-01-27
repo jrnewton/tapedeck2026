@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"local/tapedeck/internal/db"
 	"local/tapedeck/pkg/tapedeck"
@@ -42,6 +43,7 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/stations/{call}/shows", s.handleListShows)
 	mux.HandleFunc("GET /api/stations/{call}/allshows", s.handleListAllShows)
 	mux.HandleFunc("GET /api/downloads", s.handleListDownloads)
+	mux.HandleFunc("POST /api/downloads", s.handleQueueDownload)
 	mux.HandleFunc("GET /api/downloads/{id}", s.handleGetDownload)
 	mux.HandleFunc("GET /api/shows/{id}/downloads", s.handleListShowDownloads)
 	mux.HandleFunc("GET /api/audio/{id}", s.handleStreamAudio)
@@ -142,6 +144,149 @@ func (s *Server) handleListDownloads(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, downloads)
+}
+
+// handleQueueDownload queues an ad-hoc download request.
+func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Station string `json:"station"`
+		Show    string `json:"show"`
+		Date    string `json:"date"` // "latest" or "YYYY-MM-DD"
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Station == "" || req.Show == "" {
+		http.Error(w, "station and show are required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Date == "" {
+		req.Date = "latest"
+	}
+
+	// Get adapter
+	adapter, err := tapedeck.GetAdapter(strings.ToUpper(req.Station))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Get archive (latest or by date)
+	var archive *tapedeck.Archive
+	if req.Date == "latest" {
+		archive, err = adapter.GetLatestArchive(req.Show)
+		if err != nil {
+			http.Error(w, "failed to get latest archive: "+err.Error(), http.StatusNotFound)
+			return
+		}
+	} else {
+		// Parse date and find archive
+		targetDate, parseErr := time.Parse("2006-01-02", req.Date)
+		if parseErr != nil {
+			http.Error(w, "invalid date format, expected YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+
+		archives, listErr := adapter.ListArchives(req.Show)
+		if listErr != nil {
+			http.Error(w, "failed to list archives: "+listErr.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		for i := range archives {
+			if archives[i].Date.Year() == targetDate.Year() &&
+				archives[i].Date.Month() == targetDate.Month() &&
+				archives[i].Date.Day() == targetDate.Day() {
+				archive = &archives[i]
+				break
+			}
+		}
+		if archive == nil {
+			http.Error(w, "no archive found for date: "+req.Date, http.StatusNotFound)
+			return
+		}
+	}
+
+	// Get or create station in DB
+	station, err := s.DB.GetOrCreateStation(strings.ToUpper(req.Station), "", "")
+	if err != nil {
+		http.Error(w, "failed to get station: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Get or create show in DB
+	_, err = s.DB.InsertShow(station.ID, req.Show)
+	if err != nil {
+		http.Error(w, "failed to create show: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	show, err := s.DB.GetShowByName(station.ID, req.Show)
+	if err != nil {
+		http.Error(w, "failed to get show: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check for existing download (duplicate detection)
+	existing, err := s.DB.FindDownload(station.ID, &show.ID, archive.Date)
+	if err != nil {
+		http.Error(w, "failed to check existing download: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if existing != nil {
+		// Return existing download with conflict status
+		w.WriteHeader(http.StatusConflict)
+		writeJSON(w, existing)
+		return
+	}
+
+	// Create download record with pending status
+	download := &db.Download{
+		StationID:   station.ID,
+		ShowID:      &show.ID,
+		ArchiveDate: archive.Date,
+		M3UURL:      archive.M3UURL,
+		Status:      db.StatusPending,
+	}
+
+	id, err := s.DB.InsertDownload(download)
+	if err != nil {
+		http.Error(w, "failed to create download: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Start background download
+	go s.processDownload(id, adapter, archive)
+
+	// Return created download
+	createdDownload, err := s.DB.GetDownload(id)
+	if err != nil {
+		http.Error(w, "failed to get created download: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	writeJSON(w, createdDownload)
+}
+
+// processDownload runs in background to download the archive.
+func (s *Server) processDownload(id int64, adapter tapedeck.Adapter, archive *tapedeck.Archive) {
+	// Update status to downloading
+	_ = s.DB.UpdateDownloadStatus(id, db.StatusDownloading, "", "")
+
+	// Download the archive
+	filepath, err := adapter.DownloadArchive(archive, s.DownloadsDir)
+	if err != nil {
+		_ = s.DB.UpdateDownloadStatus(id, db.StatusFailed, "", err.Error())
+		return
+	}
+
+	// Store only the filename (not full path)
+	filename := filepath[strings.LastIndex(filepath, "/")+1:]
+	_ = s.DB.UpdateDownloadStatus(id, db.StatusCompleted, filename, "")
 }
 
 // handleGetDownload returns a single download by ID.

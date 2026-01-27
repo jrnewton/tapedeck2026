@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -448,5 +450,131 @@ func TestStreamAudio_PathTraversal(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected status 403, got %d", w.Code)
+	}
+}
+
+func TestQueueDownload(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	// Queue a download for Late Risers' Club (a real WMBR show)
+	body := `{"station":"WMBR","show":"Late Risers' Club","date":"latest"}`
+	req := httptest.NewRequest("POST", "/api/downloads", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected status 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var download db.Download
+	if err := json.Unmarshal(w.Body.Bytes(), &download); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if download.Station != "WMBR" {
+		t.Errorf("expected station WMBR, got %s", download.Station)
+	}
+	if download.Show != "Late Risers' Club" {
+		t.Errorf("expected show Late Risers' Club, got %s", download.Show)
+	}
+	if download.Status != db.StatusPending {
+		t.Errorf("expected status pending, got %s", download.Status)
+	}
+}
+
+func TestQueueDownload_MissingFields(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	// Missing show
+	body := `{"station":"WMBR"}`
+	req := httptest.NewRequest("POST", "/api/downloads", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+}
+
+func TestQueueDownload_UnknownStation(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	body := `{"station":"WXYZ","show":"Test Show","date":"latest"}`
+	req := httptest.NewRequest("POST", "/api/downloads", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected status 404, got %d", w.Code)
+	}
+}
+
+func TestQueueDownload_InvalidDate(t *testing.T) {
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	body := `{"station":"WMBR","show":"Lost Highway","date":"invalid-date"}`
+	req := httptest.NewRequest("POST", "/api/downloads", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d", w.Code)
+	}
+}
+
+func TestQueueDownload_Duplicate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test in short mode")
+	}
+
+	server, database := setupTestServer(t)
+	defer database.Close()
+
+	mux := http.NewServeMux()
+	server.RegisterRoutes(mux)
+
+	// First request - should succeed
+	body := `{"station":"WMBR","show":"Late Risers' Club","date":"latest"}`
+	req1 := httptest.NewRequest("POST", "/api/downloads", strings.NewReader(body))
+	req1.Header.Set("Content-Type", "application/json")
+	w1 := httptest.NewRecorder()
+	mux.ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("first request expected status 201, got %d: %s", w1.Code, w1.Body.String())
+	}
+
+	// Second request with same params - should return conflict
+	req2 := httptest.NewRequest("POST", "/api/downloads", bytes.NewReader([]byte(body)))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusConflict {
+		t.Errorf("duplicate request expected status 409, got %d: %s", w2.Code, w2.Body.String())
 	}
 }
