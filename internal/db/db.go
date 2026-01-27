@@ -142,15 +142,6 @@ func (db *DB) migrate() error {
 			UNIQUE(station_id, name)
 		);
 
-		CREATE TABLE IF NOT EXISTS archives (
-			id INTEGER PRIMARY KEY,
-			show_id INTEGER NOT NULL REFERENCES shows(id),
-			date TEXT NOT NULL,
-			m3u_url TEXT NOT NULL,
-			cached_at TEXT NOT NULL,
-			UNIQUE(show_id, date)
-		);
-
 		CREATE TABLE IF NOT EXISTS downloads (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			station_id INTEGER NOT NULL REFERENCES stations(id),
@@ -182,7 +173,6 @@ func (db *DB) migrate() error {
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_shows_station ON shows(station_id);
-		CREATE INDEX IF NOT EXISTS idx_archives_show ON archives(show_id);
 		CREATE INDEX IF NOT EXISTS idx_downloads_station ON downloads(station_id);
 		CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
 		CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules(next_run_at);
