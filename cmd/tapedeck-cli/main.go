@@ -84,6 +84,7 @@ Options for download-show:
   --output DIR        Output directory (default: ./data/downloads)
 
 Options for schedule-download:
+  --dryrun            Show what would be created without creating it
   --cron-only         Output crontab line only (legacy mode, no server)
 
 Environment Variables:
@@ -467,19 +468,23 @@ func openDB() (*db.DB, error) {
 }
 
 func cmdScheduleDownload(args []string) error {
-	// Manually extract --cron-only flag from any position
+	// Manually extract flags from any position
 	cronOnly := false
+	dryRun := false
 	var positionalArgs []string
 	for _, arg := range args {
-		if arg == "--cron-only" || arg == "-cron-only" {
+		switch arg {
+		case "--cron-only", "-cron-only":
 			cronOnly = true
-		} else {
+		case "--dryrun", "-dryrun", "--dry-run", "-dry-run":
+			dryRun = true
+		default:
 			positionalArgs = append(positionalArgs, arg)
 		}
 	}
 
 	if len(positionalArgs) < 2 {
-		return fmt.Errorf("usage: schedule-download <STATION> <SHOW> [--cron-only]")
+		return fmt.Errorf("usage: schedule-download <STATION> <SHOW> [--cron-only | --dryrun]")
 	}
 
 	callSign := strings.ToUpper(positionalArgs[0])
@@ -488,6 +493,23 @@ func cmdScheduleDownload(args []string) error {
 	adapter, err := tapedeck.GetAdapter(callSign)
 	if err != nil {
 		return err
+	}
+
+	// Validate show name exists
+	shows, err := adapter.ListShows()
+	if err != nil {
+		return fmt.Errorf("list shows: %w", err)
+	}
+
+	showFound := false
+	for _, s := range shows {
+		if s == showName {
+			showFound = true
+			break
+		}
+	}
+	if !showFound {
+		return fmt.Errorf("unknown show: %s", showName)
 	}
 
 	fmt.Printf("Analyzing broadcast history for %s...\n", showName)
@@ -507,6 +529,19 @@ func cmdScheduleDownload(args []string) error {
 	// Legacy mode: output crontab line only
 	if cronOnly {
 		return outputCronLine(callSign, showName, schedule)
+	}
+
+	// Dry run mode: show what would be created without creating it
+	if dryRun {
+		fmt.Printf("\n[Dry run - no schedule created]\n")
+		fmt.Printf("Would create schedule:\n")
+		fmt.Printf("  Station:   %s\n", callSign)
+		fmt.Printf("  Show:      %s\n", showName)
+		fmt.Printf("  Schedule:  %s (%s)\n", describeCron(schedule.RecommendedCron), schedule.RecommendedCron)
+		if schedule.Notes != "" {
+			fmt.Printf("  Note:      %s\n", schedule.Notes)
+		}
+		return nil
 	}
 
 	// Server mode: create schedule via API
@@ -611,6 +646,50 @@ func formatCronTime(cron string) string {
 	return cron
 }
 
+// describeCron converts a cron expression like "30 4 * * 0" to English like "Sundays at 04:30".
+func describeCron(cron string) string {
+	parts := strings.Fields(cron)
+	if len(parts) < 5 {
+		return cron
+	}
+
+	min := parts[0]
+	hour := parts[1]
+	dow := parts[4]
+
+	// Format time
+	if len(min) == 1 {
+		min = "0" + min
+	}
+	if len(hour) == 1 {
+		hour = "0" + hour
+	}
+	timeStr := hour + ":" + min
+
+	// Day of week
+	days := map[string]string{
+		"0": "Sundays",
+		"1": "Mondays",
+		"2": "Tuesdays",
+		"3": "Wednesdays",
+		"4": "Thursdays",
+		"5": "Fridays",
+		"6": "Saturdays",
+		"7": "Sundays", // Some systems use 7 for Sunday
+		"*": "Every day",
+	}
+
+	dayStr, ok := days[dow]
+	if !ok {
+		dayStr = "day " + dow
+	}
+
+	if dow == "*" {
+		return fmt.Sprintf("%s at %s", dayStr, timeStr)
+	}
+	return fmt.Sprintf("%s at %s", dayStr, timeStr)
+}
+
 func cmdListSchedules(_ []string) error {
 	serverURL := os.Getenv("TAPEDECK_SERVER_URL")
 	if serverURL == "" {
@@ -650,11 +729,7 @@ func cmdListSchedules(_ []string) error {
 		return nil
 	}
 
-	// Print table header
-	fmt.Printf("%-3s  %-7s  %-20s  %-12s  %-20s  %-8s  %-20s\n",
-		"ID", "Station", "Show", "Schedule", "Last Run", "Status", "Next Run")
-	fmt.Println(strings.Repeat("-", 95))
-
+	// Print each schedule
 	for _, s := range result.Schedules {
 		lastRun := "(never)"
 		if s.LastRunAt != nil {
@@ -674,13 +749,11 @@ func cmdListSchedules(_ []string) error {
 			nextRun = s.NextRunAt.Local().Format("2006-01-02 15:04")
 		}
 
-		showName := s.Show
-		if len(showName) > 20 {
-			showName = showName[:17] + "..."
-		}
-
-		fmt.Printf("%-3d  %-7s  %-20s  %-12s  %-20s  %-8s  %-20s\n",
-			s.ID, s.Station, showName, s.CronExpression, lastRun, status, nextRun)
+		fmt.Printf("[%d] %s - %s\n", s.ID, s.Station, s.Show)
+		fmt.Printf("    Schedule:  %s (%s)\n", describeCron(s.CronExpression), s.CronExpression)
+		fmt.Printf("    Last run:  %s (%s)\n", lastRun, status)
+		fmt.Printf("    Next run:  %s\n", nextRun)
+		fmt.Println()
 	}
 
 	return nil
