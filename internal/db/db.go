@@ -17,7 +17,7 @@ type Station struct {
 	ArchiveURL string
 }
 
-// Show represents a cached show from a station.
+// Show represents a show from a station.
 type Show struct {
 	ID        int64
 	StationID int64
