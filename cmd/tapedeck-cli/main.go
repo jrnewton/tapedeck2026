@@ -563,7 +563,7 @@ func cmdScheduleDownload(args []string) error {
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("show '%s' not found for station %s. Run a download first to cache shows", showName, callSign)
+		return fmt.Errorf("show '%s' not found for station %s. Run a download first to register the show", showName, callSign)
 	}
 
 	if resp.StatusCode != http.StatusCreated {
