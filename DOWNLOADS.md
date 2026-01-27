@@ -24,7 +24,7 @@ their last run, last status and next run.
 "tapedeck-cli download-show" should remain untouched, as it is a one-shot synchronous download
 function. [DONE - validation added for station/show params]
 
-7) A new CLI function "delete-schedule" will be created to remove a scheduled download by ID.
+7) [DONE] A new CLI function "delete-schedule" will be created to remove a scheduled download by ID.
 
 # UI changes
 
