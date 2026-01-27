@@ -92,12 +92,18 @@ DONE: Adjust page title based on station/show/download.
 DONE: Add favicon.
     - Using cassette-tape.png from tapedeck2 repo
     - Cached by service worker for offline use
-TODO: use favicon -> ~/code/tapedeck3/ui/public/favicon.ico
-TODO: Adjust layout, move station down to be above show, put a blurb in upper right corner or link to "about"
+DONE: Adjust layout and add About modal.
+    - Header now: TAPEDECK | About | DBG
+    - Station and Show selectors in separate rows below header
+    - About button opens mobile-friendly modal overlay with site description
+    - Tap outside modal or X to close
+DONE: Improve deployment speed.
+    - Cross-compile Go binaries locally (CGO_ENABLED=0 for Alpine compatibility)
+    - Deploy pre-built binaries instead of building on server
+    - Reduced deploy time from ~2 minutes to ~10 seconds
 TODO: selected download is not decorated consistently on IOS.
-TOOD: Have a "share" button that copies URL to current playing song.
+TODO: Have a "share" button that copies URL to current playing song.
 TODO: Change scheduler implementation so user can schedule via GUI.
-TODO: Implement "About" button
 TODO: Review all test cases and test coverage.
 TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB

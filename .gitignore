@@ -4,3 +4,5 @@ data/
 # Binaries
 /tapedeck
 /tapedeck-cli
+/tapedeck-linux
+/bin/

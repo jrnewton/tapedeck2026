@@ -49,16 +49,18 @@ DROPLET := root@68.183.125.135
 REMOTE_PATH := /opt/tapedeck
 
 deploy:
-	@echo "Syncing code to DigitalOcean..."
+	@echo "Cross-compiling for Linux (static binary)..."
+	@mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/tapedeck ./cmd/tapedeck
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/tapedeck-cli ./cmd/tapedeck-cli
+	@echo "Syncing to DigitalOcean..."
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
-		Dockerfile docker-compose.yml go.mod go.sum \
+		bin/ $(DROPLET):$(REMOTE_PATH)/bin/
+	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
+		cmd/tapedeck/web/ $(DROPLET):$(REMOTE_PATH)/cmd/tapedeck/web/
+	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
+		Dockerfile.deploy docker-compose.deploy.yml \
 		$(DROPLET):$(REMOTE_PATH)/
-	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
-		cmd/ $(DROPLET):$(REMOTE_PATH)/cmd/
-	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
-		internal/ $(DROPLET):$(REMOTE_PATH)/internal/
-	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
-		pkg/ $(DROPLET):$(REMOTE_PATH)/pkg/
 	@echo "Rebuilding and restarting on server..."
-	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose build --no-cache && docker compose up -d"
+	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose -f docker-compose.deploy.yml build && docker compose -f docker-compose.deploy.yml up -d"
 	@echo "Deploy complete! https://tapedeck.us"

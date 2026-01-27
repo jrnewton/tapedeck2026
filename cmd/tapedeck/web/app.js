@@ -112,6 +112,9 @@ const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
 const leftReel = document.querySelector('.left-reel');
 const rightReel = document.querySelector('.right-reel');
+const aboutBtn = document.getElementById('about-btn');
+const aboutModal = document.getElementById('about-modal');
+const modalClose = document.getElementById('modal-close');
 
 // Initialize
 async function init() {
@@ -550,6 +553,21 @@ function setupEventListeners() {
         localStorage.setItem('debugMode', state.debugMode);
         debugToggle.classList.toggle('active', state.debugMode);
         alert('Debug mode: ' + (state.debugMode ? 'ON' : 'OFF'));
+    });
+
+    // About modal
+    aboutBtn.addEventListener('click', () => {
+        aboutModal.classList.remove('hidden');
+    });
+
+    modalClose.addEventListener('click', () => {
+        aboutModal.classList.add('hidden');
+    });
+
+    aboutModal.addEventListener('click', (e) => {
+        if (e.target === aboutModal) {
+            aboutModal.classList.add('hidden');
+        }
     });
 
     stationSelect.addEventListener('change', async (e) => {
