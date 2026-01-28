@@ -660,6 +660,7 @@ main {
 /* Action buttons */
 .action-btn {
     width: 100%;
+    min-height: 2.75rem;
     padding: 0.75rem 1rem;
     background-color: var(--orange);
     border: 2px solid var(--black);
