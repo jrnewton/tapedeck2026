@@ -41,6 +41,16 @@ function debugAlert(message) {
     }
 }
 
+// Show error modal with message (visible to all users, not just debug mode)
+function showErrorModal(message) {
+    const errorModal = document.getElementById('error-modal');
+    const errorModalMessage = document.getElementById('error-modal-message');
+    if (errorModal && errorModalMessage) {
+        errorModalMessage.textContent = message;
+        errorModal.classList.remove('hidden');
+    }
+}
+
 // Update page title based on current state
 function updatePageTitle() {
     const base = 'Tapedeck';
@@ -134,6 +144,9 @@ const rightReel = document.querySelector('.right-reel');
 const aboutBtn = document.getElementById('about-btn');
 const aboutModal = document.getElementById('about-modal');
 const modalClose = document.getElementById('modal-close');
+const errorModal = document.getElementById('error-modal');
+const errorModalClose = document.getElementById('error-modal-close');
+const errorModalMessage = document.getElementById('error-modal-message');
 
 // Downloads page DOM elements
 const mainView = document.getElementById('main-view');
@@ -690,11 +703,11 @@ async function queueDownload() {
         });
 
         if (response.status === 409) {
-            debugAlert('This episode is already downloaded or queued');
+            showErrorModal('This episode is already downloaded or queued');
             showDownloadResult(false);
         } else if (!response.ok) {
             const error = await response.text();
-            debugAlert('Failed to queue download: ' + error);
+            showErrorModal('Failed to queue download: ' + error);
             showDownloadResult(false);
         } else {
             const download = await response.json();
@@ -704,7 +717,7 @@ async function queueDownload() {
         }
     } catch (error) {
         debugError('Failed to queue download:', error);
-        debugAlert('Failed to queue download: ' + error.message);
+        showErrorModal('Failed to queue download: ' + error.message);
         showDownloadResult(false);
     }
 }
@@ -875,10 +888,10 @@ async function createSchedule() {
         });
 
         if (response.status === 409) {
-            debugAlert('A schedule already exists for this show');
+            showErrorModal('A schedule already exists for this show');
         } else if (!response.ok) {
             const error = await response.text();
-            debugAlert('Failed to create schedule: ' + error);
+            showErrorModal('Failed to create schedule: ' + error);
         } else {
             debugLog('Schedule created successfully');
             success = true;
@@ -888,7 +901,7 @@ async function createSchedule() {
         await loadSchedules();
     } catch (error) {
         debugError('Failed to create schedule:', error);
-        debugAlert('Failed to create schedule: ' + error.message);
+        showErrorModal('Failed to create schedule: ' + error.message);
     }
 
     // Show success/error briefly, then reset
@@ -957,6 +970,17 @@ function setupEventListeners() {
     aboutModal.addEventListener('click', (e) => {
         if (e.target === aboutModal) {
             aboutModal.classList.add('hidden');
+        }
+    });
+
+    // Error modal
+    errorModalClose.addEventListener('click', () => {
+        errorModal.classList.add('hidden');
+    });
+
+    errorModal.addEventListener('click', (e) => {
+        if (e.target === errorModal) {
+            errorModal.classList.add('hidden');
         }
     });
 

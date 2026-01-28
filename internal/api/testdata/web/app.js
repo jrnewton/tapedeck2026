@@ -1,12 +1,81 @@
-// Tapedeck Frontend Application
+// Tapedeck Frontend Application - Mobile Version
 
 const state = {
     stations: [],
     shows: [],
     downloads: [],
     currentDownload: null,
-    isPlaying: false
+    isPlaying: false,
+    offlineIds: new Set(),      // tracks which downloads are saved offline
+    downloadingIds: new Set(),  // tracks downloads in progress
+    debugMode: localStorage.getItem('debugMode') === 'true',
+    // Downloads page state
+    currentPage: 'main',        // 'main' or 'downloads'
+    allShows: [],               // all shows from adapter (for downloads page)
+    schedules: []               // scheduled downloads
 };
+
+// Debug helpers - only log/alert when debug mode is enabled
+function debugLog(...args) {
+    if (state.debugMode) {
+        console.log('[DEBUG]', ...args);
+    }
+}
+
+function debugWarn(...args) {
+    if (state.debugMode) {
+        console.warn('[DEBUG]', ...args);
+    }
+}
+
+function debugError(...args) {
+    if (state.debugMode) {
+        console.error('[DEBUG]', ...args);
+    }
+}
+
+function debugAlert(message) {
+    debugLog(message);
+    if (state.debugMode) {
+        alert(message);
+    }
+}
+
+// Show error modal with message (visible to all users, not just debug mode)
+function showErrorModal(message) {
+    const errorModal = document.getElementById('error-modal');
+    const errorModalMessage = document.getElementById('error-modal-message');
+    if (errorModal && errorModalMessage) {
+        errorModalMessage.textContent = message;
+        errorModal.classList.remove('hidden');
+    }
+}
+
+// Update page title based on current state
+function updatePageTitle() {
+    const base = 'Tapedeck';
+
+    if (state.currentDownload) {
+        const d = state.currentDownload;
+        const date = new Date(d.ArchiveDate);
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        document.title = `${base} - ${d.Show} · ${dateStr}`;
+        return;
+    }
+
+    const showOption = showSelect.options[showSelect.selectedIndex];
+    if (showSelect.value && showOption) {
+        document.title = `${base} - ${showOption.textContent}`;
+        return;
+    }
+
+    if (stationSelect.value) {
+        document.title = `${base} - ${stationSelect.value}`;
+        return;
+    }
+
+    document.title = base;
+}
 
 // URL State Management
 function getURLParams() {
@@ -21,9 +90,24 @@ function updateURL(params) {
 
 async function applyURLState() {
     const params = getURLParams();
+    const page = params.get('page');
     const station = params.get('station');
     const showId = params.get('show');
     const playId = params.get('play');
+
+    // Handle page switching from URL
+    if (page === 'downloads') {
+        showPage('downloads');
+        return;
+    }
+
+    // Ensure we're on main page
+    if (state.currentPage !== 'main') {
+        mainView.classList.remove('hidden');
+        miniPlayer.classList.remove('hidden');
+        downloadsView.classList.add('hidden');
+        state.currentPage = 'main';
+    }
 
     if (station) {
         stationSelect.value = station;
@@ -35,10 +119,11 @@ async function applyURLState() {
 
             if (playId) {
                 const download = state.downloads.find(d => d.ID == playId);
-                if (download) loadDownloadWithoutPlay(download); // Load but don't autoplay
+                if (download) await loadDownloadWithoutPlay(download); // Load but don't autoplay
             }
         }
     }
+    updatePageTitle();
 }
 
 // DOM Elements
@@ -56,21 +141,132 @@ const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
 const leftReel = document.querySelector('.left-reel');
 const rightReel = document.querySelector('.right-reel');
+const aboutBtn = document.getElementById('about-btn');
+const aboutModal = document.getElementById('about-modal');
+const modalClose = document.getElementById('modal-close');
+const errorModal = document.getElementById('error-modal');
+const errorModalClose = document.getElementById('error-modal-close');
+const errorModalMessage = document.getElementById('error-modal-message');
+
+// Downloads page DOM elements
+const mainView = document.getElementById('main-view');
+const downloadsView = document.getElementById('downloads-view');
+const miniPlayer = document.querySelector('.mini-player');
+const btnRecord = document.getElementById('btn-record');
+const backBtn = document.getElementById('back-btn');
+const dlStationSelect = document.getElementById('dl-station-select');
+const dlShowSelect = document.getElementById('dl-show-select');
+const downloadBtn = document.getElementById('download-btn');
+const scheduleBtn = document.getElementById('schedule-btn');
+const schedulesList = document.getElementById('schedules-list');
 
 // Initialize
 async function init() {
+    // Register service worker for offline app shell
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch((error) => {
+            debugWarn('Service worker registration failed:', error);
+        });
+    }
+
+    // Load offline IDs from IndexedDB
+    await loadOfflineIds();
+
     await loadStations();
     setupEventListeners();
     await applyURLState();
 }
 
+// Load offline download IDs from IndexedDB
+async function loadOfflineIds() {
+    try {
+        const ids = await window.offlineStorage.listOfflineIds();
+        state.offlineIds = new Set(ids);
+    } catch (error) {
+        debugWarn('Failed to load offline IDs:', error);
+        state.offlineIds = new Set();
+    }
+}
+
 // API Functions
+
+// Cache-first: return cached data immediately, refresh in background
 async function fetchJSON(url) {
+    const cacheKey = `api-cache:${url}`;
+    const cached = localStorage.getItem(cacheKey);
+
+    // Cache-first: return cached data immediately if available
+    if (cached) {
+        // Refresh cache in background (don't await)
+        refreshCache(url, cacheKey);
+        return JSON.parse(cached);
+    }
+
+    // No cache: must fetch from network
+    return fetchAndCache(url, cacheKey);
+}
+
+// Background refresh - update cache and re-render if data changed
+async function refreshCache(url, cacheKey) {
+    try {
+        const response = await fetch(url);
+        if (response.ok) {
+            const data = await response.json();
+            const newJson = JSON.stringify(data);
+            const oldJson = localStorage.getItem(cacheKey);
+
+            // Only update and re-render if data actually changed
+            if (newJson !== oldJson) {
+                localStorage.setItem(cacheKey, newJson);
+
+                // Re-render the relevant UI component
+                const handler = getCacheRefreshHandler(url);
+                if (handler) {
+                    handler(data);
+                }
+            }
+        }
+    } catch (e) {
+        // Silently fail - we already returned cached data
+    }
+}
+
+// Get handler for re-rendering when cache is refreshed with new data
+function getCacheRefreshHandler(url) {
+    if (url === '/api/stations') {
+        return (data) => {
+            state.stations = data;
+            renderStations();
+        };
+    }
+    if (url.match(/^\/api\/stations\/[^/]+\/shows$/)) {
+        return (data) => {
+            state.shows = data;
+            renderShows();
+        };
+    }
+    if (url.match(/^\/api\/shows\/\d+\/downloads/)) {
+        return (data) => {
+            state.downloads = data;
+            renderDownloads();
+        };
+    }
+    return null;
+}
+
+// Fetch from network and cache the result
+async function fetchAndCache(url, cacheKey) {
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    return response.json();
+    const data = await response.json();
+    try {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch (e) {
+        // localStorage might be full
+    }
+    return data;
 }
 
 async function loadStations() {
@@ -78,8 +274,9 @@ async function loadStations() {
         state.stations = await fetchJSON('/api/stations');
         renderStations();
     } catch (error) {
-        console.error('Failed to load stations:', error);
+        debugError('Failed to load stations:', error);
         state.stations = [];
+        renderStations();
     }
 }
 
@@ -88,8 +285,9 @@ async function loadShows(callSign) {
         state.shows = await fetchJSON(`/api/stations/${callSign}/shows`);
         renderShows();
     } catch (error) {
-        console.error('Failed to load shows:', error);
+        debugError('Failed to load shows:', error);
         state.shows = [];
+        renderShows();
     }
 }
 
@@ -98,14 +296,15 @@ async function loadDownloads(showId) {
         state.downloads = await fetchJSON(`/api/shows/${showId}/downloads?status=completed`);
         renderDownloads();
     } catch (error) {
-        console.error('Failed to load downloads:', error);
+        debugError('Failed to load downloads:', error);
         state.downloads = [];
+        renderDownloads();
     }
 }
 
 // Render Functions
 function renderStations() {
-    stationSelect.innerHTML = '<option value="">Select station...</option>';
+    stationSelect.innerHTML = '<option value="">Station...</option>';
     state.stations.forEach(station => {
         const option = document.createElement('option');
         option.value = station.CallSign;
@@ -150,40 +349,148 @@ function renderDownloads() {
             timeZone: 'UTC'
         });
 
+        // Determine offline button state
+        const isOffline = state.offlineIds.has(download.ID);
+        const isDownloading = state.downloadingIds.has(download.ID);
+        let btnClass = 'offline-btn';
+        let btnContent = '\u2193'; // Down arrow
+        if (isDownloading) {
+            btnClass += ' downloading';
+            btnContent = ''; // Spinner via CSS
+        } else if (isOffline) {
+            btnClass += ' saved';
+            btnContent = '\u2713'; // Checkmark
+        }
+
         spine.innerHTML = `
             <div class="tape-info">
                 <div class="tape-date">${dateStr}</div>
                 <div class="tape-show">${download.Station} - ${download.Show}</div>
             </div>
-            <button class="tape-play-btn" title="Play">&#9654;</button>
+            <button class="${btnClass}" title="${isOffline ? 'Remove from device' : 'Save to device'}">${btnContent}</button>
         `;
 
-        spine.addEventListener('click', () => playDownload(download));
+        // Play on tape info click (not button)
+        const tapeInfo = spine.querySelector('.tape-info');
+        tapeInfo.addEventListener('click', () => playDownload(download));
+
+        // Offline button click
+        const offlineBtn = spine.querySelector('.offline-btn');
+        offlineBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleOffline(download);
+        });
+
         tapeList.appendChild(spine);
     });
+}
+
+// Offline Storage Functions
+
+// Toggle offline status for a download
+async function toggleOffline(download) {
+    if (state.downloadingIds.has(download.ID)) {
+        return; // Already in progress
+    }
+
+    if (state.offlineIds.has(download.ID)) {
+        // Remove from offline storage
+        try {
+            await window.offlineStorage.deleteAudio(download.ID);
+            state.offlineIds.delete(download.ID);
+            renderDownloads();
+        } catch (error) {
+            debugError('Failed to remove offline audio:', error);
+        }
+    } else {
+        // Save for offline
+        await saveForOffline(download);
+    }
+}
+
+// Fetch and save audio to IndexedDB
+async function saveForOffline(download) {
+    state.downloadingIds.add(download.ID);
+    renderDownloads();
+
+    try {
+        const response = await fetch(`/api/audio/${download.ID}`);
+        if (!response.ok) {
+            throw new Error(`Fetch failed: HTTP ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const sizeMB = (blob.size / 1024 / 1024).toFixed(1);
+        debugLog(`Downloaded ${sizeMB}MB blob for ID ${download.ID}`);
+
+        const metadata = {
+            station: download.Station,
+            show: download.Show,
+            archiveDate: download.ArchiveDate
+        };
+
+        await window.offlineStorage.saveAudio(download.ID, metadata, blob);
+        state.offlineIds.add(download.ID);
+        debugLog(`Saved to IndexedDB: ID ${download.ID}`);
+    } catch (error) {
+        debugError('Failed to save audio offline:', error);
+        debugAlert('Download failed: ' + error.message);
+    } finally {
+        state.downloadingIds.delete(download.ID);
+        renderDownloads();
+    }
+}
+
+// Get audio source - returns Blob URL if offline, otherwise API URL
+async function getAudioSource(download) {
+    if (state.offlineIds.has(download.ID)) {
+        try {
+            const record = await window.offlineStorage.getAudio(download.ID);
+            if (record && record.blob) {
+                const blobUrl = URL.createObjectURL(record.blob);
+                debugLog('Playing from offline storage:', blobUrl);
+                return blobUrl;
+            }
+            debugWarn('Offline record found but no blob for ID:', download.ID);
+        } catch (error) {
+            debugWarn('Failed to load offline audio, falling back to network:', error);
+        }
+    }
+    debugLog('Playing from network:', `/api/audio/${download.ID}`);
+    return `/api/audio/${download.ID}`;
 }
 
 // Playback Functions
 
 // Load a download without playing - used when restoring from URL
-function loadDownloadWithoutPlay(download) {
+async function loadDownloadWithoutPlay(download) {
     state.currentDownload = download;
-    audioPlayer.src = `/api/audio/${download.ID}`;
+    audioPlayer.src = await getAudioSource(download);
     audioPlayer.load();
     state.isPlaying = false;
     updateNowPlaying();
     updatePlayButton();
+    updatePageTitle();
     renderDownloads(); // Update active state
 }
 
-function playDownload(download, shouldUpdateURL = true) {
+async function playDownload(download, shouldUpdateURL = true) {
     state.currentDownload = download;
-    audioPlayer.src = `/api/audio/${download.ID}`;
+    const src = await getAudioSource(download);
+    const isOffline = src.startsWith('blob:');
+    audioPlayer.src = src;
     audioPlayer.load();
-    audioPlayer.play();
+    try {
+        await audioPlayer.play();
+    } catch (error) {
+        debugError('Playback failed:', error.name, error.message);
+        const mode = isOffline ? 'offline blob' : 'network';
+        debugAlert(`Playback failed (${mode}): ${error.message}`);
+    }
     state.isPlaying = true;
     updateNowPlaying();
     updatePlayButton();
+    updatePageTitle();
     startReels();
     renderDownloads(); // Update active state
 
@@ -203,15 +510,15 @@ function updateNowPlaying() {
     const download = state.currentDownload;
     const date = new Date(download.ArchiveDate);
     const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
-    nowPlaying.textContent = `${download.Station} - ${download.Show}\n${dateStr}`;
+    nowPlaying.textContent = `${download.Show} · ${dateStr}`;
 }
 
 function updatePlayButton() {
     const icon = btnPlay.querySelector('.icon');
-    icon.innerHTML = state.isPlaying ? '&#9616;&#9616;' : '&#9654;';
+    icon.innerHTML = state.isPlaying ? '&#9616;&#9616;' : '&#9654;&#xFE0E;';
 }
 
-function togglePlay() {
+async function togglePlay() {
     if (!state.currentDownload) {
         // If no download selected, play first one
         if (state.downloads.length > 0) {
@@ -225,9 +532,14 @@ function togglePlay() {
         state.isPlaying = false;
         stopReels();
     } else {
-        audioPlayer.play();
-        state.isPlaying = true;
-        startReels();
+        try {
+            await audioPlayer.play();
+            state.isPlaying = true;
+            startReels();
+        } catch (error) {
+            debugError('Playback failed:', error.name, error.message);
+            debugAlert('Playback failed: ' + error.message);
+        }
     }
     updatePlayButton();
 }
@@ -273,8 +585,405 @@ function formatTime(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
+// =====================================================
+// Downloads Page Functions
+// =====================================================
+
+// Show/hide pages
+function showPage(page) {
+    state.currentPage = page;
+
+    if (page === 'downloads') {
+        mainView.classList.add('hidden');
+        miniPlayer.classList.add('hidden');
+        downloadsView.classList.remove('hidden');
+        document.title = 'Tapedeck downloads';
+        // Update URL
+        const params = getURLParams();
+        params.set('page', 'downloads');
+        updateURL(params);
+        // Load data
+        loadDownloadsPageData();
+    } else {
+        downloadsView.classList.add('hidden');
+        mainView.classList.remove('hidden');
+        miniPlayer.classList.remove('hidden');
+        updatePageTitle(); // Restore main page title
+        // Remove page param from URL
+        const params = getURLParams();
+        params.delete('page');
+        updateURL(params);
+    }
+}
+
+// Load all data needed for downloads page
+async function loadDownloadsPageData() {
+    // Populate station select with registered stations
+    await populateDownloadStations();
+    // Load schedules
+    await loadSchedules();
+}
+
+// Populate station dropdown on downloads page
+async function populateDownloadStations() {
+    // Use the same stations from main page
+    if (state.stations.length === 0) {
+        await loadStations();
+    }
+
+    // Populate station select (using DOM methods to avoid innerHTML)
+    while (dlStationSelect.firstChild) {
+        dlStationSelect.removeChild(dlStationSelect.firstChild);
+    }
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Station...';
+    dlStationSelect.appendChild(defaultOption);
+
+    state.stations.forEach(station => {
+        const option = document.createElement('option');
+        option.value = station.CallSign;
+        option.textContent = station.CallSign + (station.Name ? ` - ${station.Name}` : '');
+        dlStationSelect.appendChild(option);
+    });
+}
+
+// Load all shows for a station (from adapter, not just downloaded)
+async function loadAllShows(callSign) {
+    try {
+        const response = await fetch(`/api/stations/${callSign}/allshows`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        state.allShows = await response.json();
+        return state.allShows;
+    } catch (error) {
+        debugError('Failed to load all shows:', error);
+        state.allShows = [];
+        return [];
+    }
+}
+
+// Render shows dropdown with all shows
+function renderAllShowsDropdown(selectElement) {
+    selectElement.innerHTML = '<option value="">Select show...</option>';
+    selectElement.disabled = state.allShows.length === 0;
+
+    state.allShows.forEach(showName => {
+        const option = document.createElement('option');
+        option.value = showName;
+        option.textContent = showName;
+        selectElement.appendChild(option);
+    });
+}
+
+// Queue a download
+async function queueDownload() {
+    const station = dlStationSelect.value;
+    const show = dlShowSelect.value;
+
+    if (!station || !show) {
+        debugAlert('Please select a station and show');
+        return;
+    }
+
+    const date = 'latest';
+
+    // Disable both buttons while download is in progress
+    downloadBtn.disabled = true;
+    scheduleBtn.disabled = true;
+    downloadBtn.classList.add('queued');
+    downloadBtn.textContent = 'QUEUED';
+
+    try {
+        const response = await fetch('/api/downloads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ station, show, date })
+        });
+
+        if (response.status === 409) {
+            showErrorModal('This episode is already downloaded or queued');
+            showDownloadResult(false);
+        } else if (!response.ok) {
+            const error = await response.text();
+            showErrorModal('Failed to queue download: ' + error);
+            showDownloadResult(false);
+        } else {
+            const download = await response.json();
+            debugLog('Download queued successfully, ID:', download.ID);
+            // Start polling for completion
+            pollDownloadStatus(download.ID);
+        }
+    } catch (error) {
+        debugError('Failed to queue download:', error);
+        showErrorModal('Failed to queue download: ' + error.message);
+        showDownloadResult(false);
+    }
+}
+
+// Poll for download completion status
+async function pollDownloadStatus(downloadId) {
+    const poll = async () => {
+        try {
+            const response = await fetch(`/api/downloads/${downloadId}`);
+            if (!response.ok) {
+                debugError('Failed to poll download status:', response.status);
+                showDownloadResult(false);
+                return;
+            }
+
+            const download = await response.json();
+            debugLog('Download status:', download.Status);
+
+            if (download.Status === 'completed') {
+                showDownloadResult(true);
+            } else if (download.Status === 'failed') {
+                showDownloadResult(false);
+            } else {
+                // Still pending or downloading, poll again
+                setTimeout(poll, 2000);
+            }
+        } catch (error) {
+            debugError('Error polling download status:', error);
+            showDownloadResult(false);
+        }
+    };
+    poll();
+}
+
+// Show download result and re-enable buttons
+function showDownloadResult(success) {
+    downloadBtn.classList.remove('queued');
+    if (success) {
+        downloadBtn.classList.add('success');
+        downloadBtn.textContent = '\u2713'; // ✓
+    } else {
+        downloadBtn.classList.add('error');
+        downloadBtn.textContent = '\u2717'; // ✗
+    }
+
+    setTimeout(() => {
+        downloadBtn.disabled = false;
+        scheduleBtn.disabled = false;
+        downloadBtn.classList.remove('success', 'error');
+        downloadBtn.textContent = 'LATEST';
+    }, 1500);
+}
+
+// Load schedules
+async function loadSchedules() {
+    try {
+        const response = await fetch('/api/schedules');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        state.schedules = data.schedules || [];
+        renderSchedules();
+    } catch (error) {
+        debugError('Failed to load schedules:', error);
+        state.schedules = [];
+        renderSchedules();
+    }
+}
+
+// Render schedules list
+function renderSchedules() {
+    schedulesList.innerHTML = '';
+
+    if (state.schedules.length === 0) {
+        const emptyMsg = document.createElement('p');
+        emptyMsg.className = 'empty-message';
+        emptyMsg.textContent = 'No scheduled downloads';
+        schedulesList.appendChild(emptyMsg);
+        return;
+    }
+
+    state.schedules.forEach(sched => {
+        const card = document.createElement('div');
+        card.className = 'schedule-card';
+
+        const schedInfo = document.createElement('div');
+        schedInfo.className = 'schedule-info';
+
+        const schedShow = document.createElement('div');
+        schedShow.className = 'schedule-show';
+        schedShow.textContent = `${sched.Station} - ${sched.Show}`;
+
+        const schedCron = document.createElement('div');
+        schedCron.className = 'schedule-cron';
+        schedCron.textContent = formatCron(sched.CronExpression);
+
+        const schedTimes = document.createElement('div');
+        schedTimes.className = 'schedule-times';
+        const lastRun = sched.LastRunAt
+            ? new Date(sched.LastRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'Never';
+        const nextRun = sched.NextRunAt
+            ? new Date(sched.NextRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : 'N/A';
+        schedTimes.textContent = `Last: ${lastRun} · Next: ${nextRun}`;
+
+        schedInfo.appendChild(schedShow);
+        schedInfo.appendChild(schedCron);
+        schedInfo.appendChild(schedTimes);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'schedule-delete';
+        deleteBtn.title = 'Delete schedule';
+        deleteBtn.textContent = '\u00D7'; // ×
+        deleteBtn.addEventListener('click', () => deleteSchedule(sched.ID));
+
+        card.appendChild(schedInfo);
+        card.appendChild(deleteBtn);
+        schedulesList.appendChild(card);
+    });
+}
+
+// Format cron expression to human-readable
+function formatCron(cronExpr) {
+    if (!cronExpr) return 'Unknown schedule';
+
+    const parts = cronExpr.split(' ');
+    if (parts.length < 5) return cronExpr;
+
+    const [minute, hour, , , dayOfWeek] = parts;
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    let dayStr = 'Every day';
+    if (dayOfWeek !== '*') {
+        const dayNum = parseInt(dayOfWeek);
+        if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
+            dayStr = `Every ${days[dayNum]}`;
+        }
+    }
+
+    const hourStr = hour.padStart(2, '0');
+    const minStr = minute.padStart(2, '0');
+
+    return `${dayStr} ~${hourStr}:${minStr}`;
+}
+
+// Create a schedule
+async function createSchedule() {
+    const station = dlStationSelect.value;
+    const show = dlShowSelect.value;
+
+    if (!station || !show) {
+        debugAlert('Please select a station and show');
+        return;
+    }
+
+    scheduleBtn.disabled = true;
+    scheduleBtn.classList.add('queued');
+    scheduleBtn.textContent = 'SAVING...';
+
+    let success = false;
+    try {
+        const response = await fetch('/api/schedules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ station, show })
+        });
+
+        if (response.status === 409) {
+            showErrorModal('A schedule already exists for this show');
+        } else if (!response.ok) {
+            const error = await response.text();
+            showErrorModal('Failed to create schedule: ' + error);
+        } else {
+            debugLog('Schedule created successfully');
+            success = true;
+        }
+
+        // Refresh schedules
+        await loadSchedules();
+    } catch (error) {
+        debugError('Failed to create schedule:', error);
+        showErrorModal('Failed to create schedule: ' + error.message);
+    }
+
+    // Show success/error briefly, then reset
+    scheduleBtn.classList.remove('queued');
+    if (success) {
+        scheduleBtn.classList.add('success');
+        scheduleBtn.textContent = '\u2713'; // ✓
+    } else {
+        scheduleBtn.classList.add('error');
+        scheduleBtn.textContent = '\u2717'; // ✗
+    }
+
+    setTimeout(() => {
+        scheduleBtn.disabled = false;
+        scheduleBtn.classList.remove('success', 'error');
+        scheduleBtn.textContent = 'SCHEDULE';
+    }, 1500);
+}
+
+// Delete a schedule
+async function deleteSchedule(id) {
+    try {
+        const response = await fetch(`/api/schedules/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            const error = await response.text();
+            debugAlert('Failed to delete schedule: ' + error);
+        } else {
+            debugLog('Schedule deleted');
+        }
+
+        // Refresh schedules
+        await loadSchedules();
+    } catch (error) {
+        debugError('Failed to delete schedule:', error);
+        debugAlert('Failed to delete schedule: ' + error.message);
+    }
+}
+
+
 // Event Listeners
 function setupEventListeners() {
+    // Debug toggle
+    const debugToggle = document.getElementById('debug-toggle');
+    if (state.debugMode) {
+        debugToggle.classList.add('active');
+    }
+    debugToggle.addEventListener('click', () => {
+        state.debugMode = !state.debugMode;
+        localStorage.setItem('debugMode', state.debugMode);
+        debugToggle.classList.toggle('active', state.debugMode);
+        alert('Debug mode: ' + (state.debugMode ? 'ON' : 'OFF'));
+    });
+
+    // About modal
+    aboutBtn.addEventListener('click', () => {
+        aboutModal.classList.remove('hidden');
+    });
+
+    modalClose.addEventListener('click', () => {
+        aboutModal.classList.add('hidden');
+    });
+
+    aboutModal.addEventListener('click', (e) => {
+        if (e.target === aboutModal) {
+            aboutModal.classList.add('hidden');
+        }
+    });
+
+    // Error modal
+    errorModalClose.addEventListener('click', () => {
+        errorModal.classList.add('hidden');
+    });
+
+    errorModal.addEventListener('click', (e) => {
+        if (e.target === errorModal) {
+            errorModal.classList.add('hidden');
+        }
+    });
+
     stationSelect.addEventListener('change', async (e) => {
         const callSign = e.target.value;
         if (callSign) {
@@ -290,7 +999,13 @@ function setupEventListeners() {
             updateURL(new URLSearchParams());
         }
         state.downloads = [];
-        tapeList.innerHTML = '<p class="empty-message">Select a show to view downloads</p>';
+        state.currentDownload = null;
+        tapeList.textContent = '';
+        const msg = document.createElement('p');
+        msg.className = 'empty-message';
+        msg.textContent = 'Select a show to view downloads';
+        tapeList.appendChild(msg);
+        updatePageTitle();
     });
 
     showSelect.addEventListener('change', async (e) => {
@@ -305,13 +1020,19 @@ function setupEventListeners() {
             updateURL(params);
         } else {
             state.downloads = [];
-            tapeList.innerHTML = '<p class="empty-message">Select a show to view downloads</p>';
+            tapeList.textContent = '';
+            const msg = document.createElement('p');
+            msg.className = 'empty-message';
+            msg.textContent = 'Select a show to view downloads';
+            tapeList.appendChild(msg);
             // Keep only station in URL
             const params = new URLSearchParams();
             const station = stationSelect.value;
             if (station) params.set('station', station);
             updateURL(params);
         }
+        state.currentDownload = null;
+        updatePageTitle();
     });
 
     btnPlay.addEventListener('click', togglePlay);
@@ -327,6 +1048,12 @@ function setupEventListeners() {
 
     audioPlayer.addEventListener('loadedmetadata', () => {
         timeTotal.textContent = formatTime(audioPlayer.duration);
+    });
+
+    audioPlayer.addEventListener('error', (e) => {
+        const error = audioPlayer.error;
+        debugError('Audio error:', error?.code, error?.message);
+        debugAlert('Audio error: ' + (error?.message || 'Unknown error'));
     });
 
     audioPlayer.addEventListener('ended', () => {
@@ -359,6 +1086,31 @@ function setupEventListeners() {
     window.addEventListener('popstate', async () => {
         await applyURLState();
     });
+
+    // Downloads page event listeners
+    btnRecord.addEventListener('click', () => showPage('downloads'));
+    backBtn.addEventListener('click', () => showPage('main'));
+
+    // Download section - station change loads all shows
+    dlStationSelect.addEventListener('change', async (e) => {
+        const callSign = e.target.value;
+        if (callSign) {
+            await loadAllShows(callSign);
+            renderAllShowsDropdown(dlShowSelect);
+        } else {
+            state.allShows = [];
+            dlShowSelect.textContent = '';
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Select show...';
+            dlShowSelect.appendChild(opt);
+            dlShowSelect.disabled = true;
+        }
+    });
+
+    // Action buttons
+    downloadBtn.addEventListener('click', queueDownload);
+    scheduleBtn.addEventListener('click', createSchedule);
 }
 
 // Start the app

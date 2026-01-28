@@ -2,83 +2,139 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tapedeck</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <header>
-        <h1>TAPEDECK</h1>
-    </header>
-
-    <main>
-        <div class="controls">
-            <div class="selector">
-                <label for="station-select">STATION</label>
-                <select id="station-select">
-                    <option value="">Select station...</option>
-                </select>
+    <!-- Main View (Player) -->
+    <div id="main-view">
+        <header>
+            <h1><a href="/">TAPEDECK</a></h1>
+            <div class="header-right">
+                <button id="about-btn" class="header-btn" title="About Tapedeck">About</button>
+                <button id="debug-toggle" class="debug-toggle" title="Toggle debug mode">DBG</button>
             </div>
+        </header>
 
-            <div class="selector">
-                <label for="show-select">SHOW</label>
-                <select id="show-select" disabled>
-                    <option value="">Select show...</option>
-                </select>
+        <div class="selector-row">
+            <select id="station-select">
+                <option value="">Station...</option>
+            </select>
+        </div>
+
+        <div class="selector-row">
+            <select id="show-select" disabled>
+                <option value="">Select show...</option>
+            </select>
+        </div>
+
+        <!-- About Modal Overlay -->
+        <div id="about-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button id="modal-close" class="modal-close">&times;</button>
+                <h2>About Tapedeck</h2>
+                <p>Tapedeck is a personal radio archive player for listening to saved broadcasts from your favorite stations.</p>
+                <p>Select a station and show to browse available recordings, then tap a tape to start playing.</p>
+                <p>Use the download button to save recordings for offline listening.</p>
             </div>
         </div>
 
-        <div class="tape-deck">
-            <div class="tape-window">
-                <div class="reel left-reel">
-                    <div class="reel-center"></div>
-                </div>
-                <div class="tape-label">
-                    <span id="now-playing">No tape loaded</span>
-                </div>
-                <div class="reel right-reel">
-                    <div class="reel-center"></div>
-                </div>
-            </div>
-
-            <div class="transport-controls">
-                <button id="btn-prev" title="Previous">
-                    <span class="icon">|&lt;&lt;</span>
-                </button>
-                <button id="btn-play" title="Play/Pause">
-                    <span class="icon play-icon">&#9654;</span>
-                </button>
-                <button id="btn-stop" title="Stop">
-                    <span class="icon">&#9632;</span>
-                </button>
-                <button id="btn-next" title="Next">
-                    <span class="icon">&gt;&gt;|</span>
-                </button>
-            </div>
-
-            <div class="progress-container">
-                <span id="time-current">0:00</span>
-                <input type="range" id="progress-bar" min="0" max="100" value="0">
-                <span id="time-total">0:00</span>
+        <!-- Error Modal Overlay -->
+        <div id="error-modal" class="modal-overlay hidden">
+            <div class="modal-content">
+                <button id="error-modal-close" class="modal-close">&times;</button>
+                <h2>Error</h2>
+                <p id="error-modal-message"></p>
             </div>
         </div>
 
-        <div class="tape-collection">
-            <h2>COLLECTION</h2>
+        <main>
             <div id="tape-list" class="tape-list">
                 <p class="empty-message">Select a station and show to view downloads</p>
             </div>
+        </main>
+    </div>
+
+    <!-- Downloads View -->
+    <div id="downloads-view" class="hidden">
+        <div class="downloads-header">
+            <button id="back-btn" class="back-btn">&lt;</button>
+            <h2>DOWNLOADS</h2>
         </div>
-    </main>
 
-    <footer>
-        <p>TAPEDECK.US</p>
-    </footer>
+        <!-- Download Episode Section -->
+        <section class="download-section">
+            <h3>DOWNLOAD EPISODES</h3>
+            <div class="form-group">
+                <select id="dl-station-select">
+                    <option value="">Station...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <select id="dl-show-select" disabled>
+                    <option value="">Select show...</option>
+                </select>
+            </div>
+            <div class="button-row">
+                <button id="download-btn" class="action-btn">LATEST</button>
+                <button id="schedule-btn" class="action-btn">SCHEDULE</button>
+            </div>
+        </section>
 
-    <audio id="audio-player"></audio>
+        <hr class="section-divider">
+
+        <!-- Scheduled Downloads List -->
+        <section class="download-section">
+            <h3>SCHEDULED DOWNLOADS</h3>
+            <div id="schedules-list" class="schedules-list"></div>
+        </section>
+    </div>
+
+    <div class="mini-player">
+        <div class="mini-tape">
+            <div class="mini-reel left-reel">
+                <div class="mini-reel-center"></div>
+            </div>
+            <div class="mini-label">
+                <span id="now-playing">No tape loaded</span>
+            </div>
+            <div class="mini-reel right-reel">
+                <div class="mini-reel-center"></div>
+            </div>
+        </div>
+
+        <div class="mini-progress">
+            <span id="time-current">0:00</span>
+            <input type="range" id="progress-bar" min="0" max="100" value="0">
+            <span id="time-total">0:00</span>
+        </div>
+
+        <div class="mini-controls">
+            <button id="btn-prev" title="Previous">
+                <span class="icon">|&lt;&lt;</span>
+            </button>
+            <button id="btn-play" title="Play/Pause">
+                <span class="icon play-icon">&#9654;&#xFE0E;</span>
+            </button>
+            <button id="btn-stop" title="Stop">
+                <span class="icon">&#9632;</span>
+            </button>
+            <button id="btn-next" title="Next">
+                <span class="icon">&gt;&gt;|</span>
+            </button>
+            <button id="btn-record" title="Downloads">
+                <span class="icon record-icon">&#9679;</span>
+            </button>
+        </div>
+    </div>
+
+    <audio id="audio-player" playsinline></audio>
+    <script src="offline.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

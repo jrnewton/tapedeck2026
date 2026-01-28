@@ -638,3 +638,165 @@ func TestE2EURLStateRestorationWithPlay(t *testing.T) {
 		t.Error("browser console had errors during test")
 	}
 }
+
+// TestE2EErrorModalOnDuplicateDownload verifies that clicking LATEST twice shows error modal
+func TestE2EErrorModalOnDuplicateDownload(t *testing.T) {
+	if os.Getenv("E2E_TEST") == "" {
+		t.Skip("Skipping E2E test; set E2E_TEST=1 to run")
+	}
+
+	server, _, serverCleanup := setupTestServer(t)
+	defer serverCleanup()
+
+	ctx, browserCleanup := newBrowserContext(t)
+	defer browserCleanup()
+
+	collector := newConsoleCollector(t)
+	collector.listen(ctx)
+
+	var errorModalVisible bool
+	var errorModalText string
+	var errorModalHiddenAfterClose bool
+
+	err := chromedp.Run(ctx,
+		// Navigate to downloads page
+		chromedp.Navigate(server.URL+"/?page=downloads"),
+		chromedp.WaitVisible(`#dl-station-select`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Select station
+		chromedp.SetValue(`#dl-station-select`, "WMBR", chromedp.ByID),
+		chromedp.Evaluate(`document.getElementById('dl-station-select').dispatchEvent(new Event('change'))`, nil),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Select show
+		chromedp.SetValue(`#dl-show-select`, "Backwoods", chromedp.ByID),
+		chromedp.Sleep(200*time.Millisecond),
+
+		// First click on LATEST - should succeed (but may conflict with existing download)
+		chromedp.Click(`#download-btn`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Wait for button to reset (success or error)
+		chromedp.WaitEnabled(`#download-btn`, chromedp.ByID),
+		chromedp.Sleep(2000*time.Millisecond),
+
+		// Second click on LATEST - should get 409 conflict
+		chromedp.Click(`#download-btn`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Wait for error modal to appear
+		chromedp.WaitVisible(`#error-modal:not(.hidden)`, chromedp.ByQuery),
+
+		// Check error modal is visible
+		chromedp.Evaluate(`!document.getElementById('error-modal').classList.contains('hidden')`, &errorModalVisible),
+
+		// Get error message text
+		chromedp.Text(`#error-modal-message`, &errorModalText, chromedp.ByID),
+
+		// Click close button
+		chromedp.Click(`#error-modal-close`, chromedp.ByID),
+		chromedp.Sleep(200*time.Millisecond),
+
+		// Check modal is hidden
+		chromedp.Evaluate(`document.getElementById('error-modal').classList.contains('hidden')`, &errorModalHiddenAfterClose),
+	)
+
+	if err != nil {
+		t.Fatalf("chromedp run failed: %v", err)
+	}
+
+	if !errorModalVisible {
+		t.Error("expected error modal to be visible after duplicate download attempt")
+	}
+
+	if !strings.Contains(errorModalText, "already downloaded") && !strings.Contains(errorModalText, "already queued") {
+		t.Errorf("expected error message about already downloaded/queued, got: %q", errorModalText)
+	}
+
+	if !errorModalHiddenAfterClose {
+		t.Error("expected error modal to be hidden after clicking close button")
+	}
+}
+
+// TestE2EErrorModalOnDuplicateSchedule verifies that clicking SCHEDULE twice shows error modal
+func TestE2EErrorModalOnDuplicateSchedule(t *testing.T) {
+	if os.Getenv("E2E_TEST") == "" {
+		t.Skip("Skipping E2E test; set E2E_TEST=1 to run")
+	}
+
+	server, _, serverCleanup := setupTestServer(t)
+	defer serverCleanup()
+
+	ctx, browserCleanup := newBrowserContext(t)
+	defer browserCleanup()
+
+	collector := newConsoleCollector(t)
+	collector.listen(ctx)
+
+	var errorModalVisible bool
+	var errorModalText string
+	var errorModalHiddenAfterClose bool
+
+	err := chromedp.Run(ctx,
+		// Navigate to downloads page
+		chromedp.Navigate(server.URL+"/?page=downloads"),
+		chromedp.WaitVisible(`#dl-station-select`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Select station
+		chromedp.SetValue(`#dl-station-select`, "WMBR", chromedp.ByID),
+		chromedp.Evaluate(`document.getElementById('dl-station-select').dispatchEvent(new Event('change'))`, nil),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Select show
+		chromedp.SetValue(`#dl-show-select`, "Backwoods", chromedp.ByID),
+		chromedp.Sleep(200*time.Millisecond),
+
+		// First click on SCHEDULE - should succeed
+		chromedp.Click(`#schedule-btn`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Wait for button to reset
+		chromedp.WaitEnabled(`#schedule-btn`, chromedp.ByID),
+		chromedp.Sleep(2000*time.Millisecond),
+
+		// Second click on SCHEDULE - should get 409 conflict
+		chromedp.Click(`#schedule-btn`, chromedp.ByID),
+		chromedp.Sleep(500*time.Millisecond),
+
+		// Wait for error modal to appear
+		chromedp.WaitVisible(`#error-modal:not(.hidden)`, chromedp.ByQuery),
+
+		// Check error modal is visible
+		chromedp.Evaluate(`!document.getElementById('error-modal').classList.contains('hidden')`, &errorModalVisible),
+
+		// Get error message text
+		chromedp.Text(`#error-modal-message`, &errorModalText, chromedp.ByID),
+
+		// Click outside modal to close (on overlay)
+		chromedp.Evaluate(`document.getElementById('error-modal').click()`, nil),
+		chromedp.Sleep(200*time.Millisecond),
+
+		// Check modal is hidden
+		chromedp.Evaluate(`document.getElementById('error-modal').classList.contains('hidden')`, &errorModalHiddenAfterClose),
+	)
+
+	if err != nil {
+		t.Fatalf("chromedp run failed: %v", err)
+	}
+
+	if !errorModalVisible {
+		t.Error("expected error modal to be visible after duplicate schedule attempt")
+	}
+
+	// Error message could be "already exists" (409) or "scheduler not configured" (test env)
+	// Either way, the modal should show an error
+	if errorModalText == "" {
+		t.Error("expected error message in modal, got empty string")
+	}
+
+	if !errorModalHiddenAfterClose {
+		t.Error("expected error modal to be hidden after clicking outside")
+	}
+}
