@@ -824,8 +824,8 @@ function renderSchedules() {
 
         const schedCron = document.createElement('div');
         schedCron.className = 'schedule-cron';
-        // Use backend-provided CronDescription, fallback to local formatCron
-        schedCron.textContent = sched.CronDescription || formatCron(sched.CronExpression);
+        // Use backend-provided CronDescription
+        schedCron.textContent = sched.CronDescription;
 
         const schedTimes = document.createElement('div');
         schedTimes.className = 'schedule-times';
@@ -856,30 +856,6 @@ function renderSchedules() {
         card.appendChild(deleteBtn);
         schedulesList.appendChild(card);
     });
-}
-
-// Format cron expression to human-readable
-function formatCron(cronExpr) {
-    if (!cronExpr) return 'Unknown schedule';
-
-    const parts = cronExpr.split(' ');
-    if (parts.length < 5) return cronExpr;
-
-    const [minute, hour, , , dayOfWeek] = parts;
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
-    let dayStr = 'Every day';
-    if (dayOfWeek !== '*') {
-        const dayNum = parseInt(dayOfWeek);
-        if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
-            dayStr = `Every ${days[dayNum]}`;
-        }
-    }
-
-    const hourStr = hour.padStart(2, '0');
-    const minStr = minute.padStart(2, '0');
-
-    return `${dayStr} ~${hourStr}:${minStr}`;
 }
 
 // Create a schedule
