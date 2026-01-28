@@ -1,4 +1,4 @@
-.PHONY: help build run stop test test-e2e clean logs deploy
+.PHONY: help build run stop test test-e2e clean logs deploy sync-data
 
 help:
 	@echo "Usage: make [target]"
@@ -12,6 +12,7 @@ help:
 	@echo "  test-e2e  Run E2E tests (requires Docker)"
 	@echo "  clean     Remove build artifacts"
 	@echo "  deploy    Deploy to DigitalOcean droplet"
+	@echo "  sync-data Sync local ./data/ to production (DESTRUCTIVE)"
 
 # Build the server binary (local dev)
 build:
@@ -65,3 +66,12 @@ deploy:
 	@echo "Rebuilding and restarting on server..."
 	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose -f docker-compose.deploy.yml build && docker compose -f docker-compose.deploy.yml up -d"
 	@echo "Deploy complete! https://tapedeck.us"
+
+# Sync local data to production (one-way, destructive)
+sync-data:
+	@echo "WARNING: This will overwrite production data with local data!"
+	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
+	@sleep 5
+	rsync -avz --delete --checksum -e "ssh -i $(SSH_KEY)" \
+		./data/ $(DROPLET):$(REMOTE_PATH)/data/
+	@echo "Data sync complete."
