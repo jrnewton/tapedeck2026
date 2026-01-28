@@ -18,8 +18,8 @@ import (
 type ScheduleResponse struct {
 	db.Schedule
 	CronDescription string `json:"CronDescription"` // e.g., "Wednesdays at 09:30"
-	LastRunDisplay  string `json:"LastRunDisplay"`  // e.g., "2026-01-28 09:30"
-	NextRunDisplay  string `json:"NextRunDisplay"`  // e.g., "2026-02-04 09:30"
+	LastRunDisplay  string `json:"LastRunDisplay"`  // e.g., "Wed Jan 28"
+	NextRunDisplay  string `json:"NextRunDisplay"`  // e.g., "Wed Feb 4"
 }
 
 // Scheduler interface for schedule management.
@@ -593,11 +593,11 @@ func formatScheduleResponse(sched db.Schedule) ScheduleResponse {
 	}
 
 	if sched.LastRunAt != nil {
-		resp.LastRunDisplay = sched.LastRunAt.Format("2006-01-02 15:04")
+		resp.LastRunDisplay = sched.LastRunAt.Format("Mon Jan 2")
 	}
 
 	if sched.NextRunAt != nil {
-		resp.NextRunDisplay = sched.NextRunAt.Format("2006-01-02 15:04")
+		resp.NextRunDisplay = sched.NextRunAt.Format("Mon Jan 2")
 	}
 
 	return resp

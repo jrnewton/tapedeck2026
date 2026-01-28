@@ -802,20 +802,20 @@ func TestFormatScheduleResponse(t *testing.T) {
 		t.Errorf("CronDescription should show Wednesdays, got %q", resp.CronDescription)
 	}
 
-	// LastRunDisplay should show time without timezone label
+	// LastRunDisplay should show date in "Mon Jan 2" format
 	if resp.LastRunDisplay == "-" {
 		t.Error("LastRunDisplay should not be '-' when LastRunAt is set")
 	}
-	if !strings.Contains(resp.LastRunDisplay, "2026-01-28") {
-		t.Errorf("LastRunDisplay should contain date, got %q", resp.LastRunDisplay)
+	if resp.LastRunDisplay != "Wed Jan 28" {
+		t.Errorf("LastRunDisplay should be 'Wed Jan 28', got %q", resp.LastRunDisplay)
 	}
 
-	// NextRunDisplay should show time without timezone label
+	// NextRunDisplay should show date in "Mon Jan 2" format
 	if resp.NextRunDisplay == "-" {
 		t.Error("NextRunDisplay should not be '-' when NextRunAt is set")
 	}
-	if !strings.Contains(resp.NextRunDisplay, "2026-02-04") {
-		t.Errorf("NextRunDisplay should contain date, got %q", resp.NextRunDisplay)
+	if resp.NextRunDisplay != "Wed Feb 4" {
+		t.Errorf("NextRunDisplay should be 'Wed Feb 4', got %q", resp.NextRunDisplay)
 	}
 }
 
