@@ -1,7 +1,7 @@
 // Tapedeck Service Worker
 // Provides offline app shell caching for PWA experience
 
-const CACHE_VERSION = 'v20';
+const CACHE_VERSION = 'v21';
 const CACHE_NAME = `tapedeck-${CACHE_VERSION}`;
 
 // App shell files to cache for offline use
@@ -10,9 +10,10 @@ const APP_SHELL = [
     '/index.html',
     '/app.js',
     '/style.css',
-    '/offline.js',
-    '/favicon.png'
+    '/offline.js'
 ];
+//    '/favicon.png'
+
 
 // Install event - cache app shell
 self.addEventListener('install', (event) => {

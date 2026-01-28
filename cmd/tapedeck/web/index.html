@@ -1,15 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tapedeck</title>
-    <link rel="icon" type="image/png" href="/favicon.png">
+    <!-- <link rel="icon" type="image/png" href="/favicon.png">  -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+        href="https://fonts.gstatic.com/s/audiowide/v22/l7gdbjpo0cum0ckerWCdmA_OMRlABolM.woff2">
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+        href="https://fonts.gstatic.com/s/audiowide/v22/l7gdbjpo0cum0ckerWCdlg_OMRlABg.woff2">
     <link href="https://fonts.googleapis.com/css2?family=Audiowide&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <!-- Main View (Player) -->
     <div id="main-view">
@@ -38,7 +44,8 @@
             <div class="modal-content">
                 <button id="modal-close" class="modal-close">&times;</button>
                 <h2>About Tapedeck</h2>
-                <p>Tapedeck is a personal radio archive player for listening to saved broadcasts from your favorite stations.</p>
+                <p>Tapedeck is a personal radio archive player for listening to saved broadcasts from your favorite
+                    stations.</p>
                 <p>Select a station and show to browse available recordings, then tap a tape to start playing.</p>
                 <p>Use the download button to save recordings for offline listening.</p>
             </div>
@@ -137,4 +144,5 @@
     <script src="offline.js"></script>
     <script src="app.js"></script>
 </body>
+
 </html>
