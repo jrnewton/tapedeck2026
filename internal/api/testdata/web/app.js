@@ -304,7 +304,7 @@ async function loadDownloads(showId) {
 
 // Render Functions
 function renderStations() {
-    stationSelect.innerHTML = '<option value="">Station...</option>';
+    stationSelect.innerHTML = '<option value="">Select station...</option>';
     state.stations.forEach(station => {
         const option = document.createElement('option');
         option.value = station.CallSign;
@@ -637,7 +637,7 @@ async function populateDownloadStations() {
     }
     const defaultOption = document.createElement('option');
     defaultOption.value = '';
-    defaultOption.textContent = 'Station...';
+    defaultOption.textContent = 'Select station...';
     dlStationSelect.appendChild(defaultOption);
 
     state.stations.forEach(station => {
