@@ -1,4 +1,4 @@
-.PHONY: help build run stop test test-e2e clean logs deploy sync-data
+.PHONY: help build run stop test test-e2e clean logs deploy sync-data stop-prod
 
 help:
 	@echo "Usage: make [target]"
@@ -13,6 +13,7 @@ help:
 	@echo "  clean     Remove build artifacts"
 	@echo "  deploy    Deploy to DigitalOcean droplet"
 	@echo "  sync-data Sync local ./data/ to production (DESTRUCTIVE)"
+	@echo "  stop-prod Stop production server on DigitalOcean"
 
 # Build the server binary (local dev)
 build:
@@ -75,3 +76,8 @@ sync-data:
 	rsync -avz --delete --checksum -e "ssh -i $(SSH_KEY)" \
 		./data/ $(DROPLET):$(REMOTE_PATH)/data/
 	@echo "Data sync complete."
+
+# Stop production server on DigitalOcean
+stop-prod:
+	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose -f docker-compose.deploy.yml down"
+	@echo "Production server stopped."
