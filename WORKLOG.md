@@ -109,8 +109,15 @@ DONE: UI polish for iOS Safari.
     - Tape spine accent color changed from red to original orange
     - Audio player progress bar thumb changed from orange to neutral grey
     - Play button icon fixed to render consistently with other transport buttons (text variation selector)
-TODO: Change scheduler implementation so user can schedule via GUI.
+PROG: Change scheduler implementation so user can schedule via GUI.
+TODO: build CLI for "station refresh" which will refresh station data
+    - Station table needs timezone of station
+    - need archive table with historical archive dates _and_ times all in station timezone offset.
+    - must handle shows that occur on multiple days.
+    - merge "rebroadcast" into same show
+TODO: disable downloads page in offline mode (eg when using service worker)
 TODO: implement PWA support on android - see pwa-requirements.md
+TOOD: performance optimization, improve favicon size, TTL on files, minified css/js.
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Review all test cases and test coverage.
 TODO: Implement backend CLI for WHRB
