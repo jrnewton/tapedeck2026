@@ -590,6 +590,7 @@ function showPage(page) {
         mainView.classList.add('hidden');
         miniPlayer.classList.add('hidden');
         downloadsView.classList.remove('hidden');
+        document.title = 'Tapedeck downloads';
         // Update URL
         const params = getURLParams();
         params.set('page', 'downloads');
@@ -602,6 +603,7 @@ function showPage(page) {
         downloadsView.classList.add('hidden');
         mainView.classList.remove('hidden');
         miniPlayer.classList.remove('hidden');
+        updatePageTitle(); // Restore main page title
         // Remove page param from URL
         const params = getURLParams();
         params.delete('page');
