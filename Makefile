@@ -15,9 +15,9 @@ help:
 
 # Build the server binary (local dev)
 build:
-	@mkdir -p bin/test
-	go build -o bin/test/tapedeck ./cmd/tapedeck
-	go build -o bin/test/tapedeck-cli ./cmd/tapedeck-cli
+	@mkdir -p bin
+	go build -o bin/tapedeck ./cmd/tapedeck
+	go build -o bin/tapedeck-cli ./cmd/tapedeck-cli
 
 # Run the server via Docker Compose
 run:
