@@ -115,7 +115,9 @@ DONE: Change scheduler implementation so user can schedule via GUI.
     - API: /api/schedules endpoints for CRUD operations
     - UI: Downloads page shows scheduled downloads with status
     - Timezone simplified: all times in America/New_York (TZ env var in Docker)
-TODO: disable downloads page in offline mode (eg when using service worker)
+DONE: disable downloads page in offline mode (eg when using service worker)
+    - Added /api/ping endpoint for future connectivity checks
+    - Downloads page shows error modal when API returns 503 (offline)
 TODO: implement PWA support on android - see pwa-requirements.md
 TODO: build CLI for "station refresh" which will refresh station data
     - Station table needs timezone of station

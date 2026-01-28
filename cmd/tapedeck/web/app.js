@@ -776,6 +776,10 @@ async function loadSchedules() {
     try {
         const response = await fetch('/api/schedules');
         if (!response.ok) {
+            // Check for offline (503 from service worker)
+            if (response.status === 503) {
+                showErrorModal('Downloads page requires server connection');
+            }
             throw new Error(`HTTP ${response.status}`);
         }
         const data = await response.json();
@@ -783,6 +787,10 @@ async function loadSchedules() {
         renderSchedules();
     } catch (error) {
         debugError('Failed to load schedules:', error);
+        // Show offline modal for network errors (fetch threw before returning response)
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+            showErrorModal('Downloads page requires server connection');
+        }
         state.schedules = [];
         renderSchedules();
     }

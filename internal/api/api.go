@@ -48,6 +48,11 @@ func NewServer(database *db.DB, downloadsDir string) *Server {
 
 // RegisterRoutes registers all API routes on the given mux.
 func (s *Server) RegisterRoutes(mux *http.ServeMux) {
+	// Lightweight ping endpoint for connectivity checks
+	mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	mux.HandleFunc("GET /api/stations", s.handleListStations)
 	mux.HandleFunc("GET /api/stations/{call}/shows", s.handleListShows)
 	mux.HandleFunc("GET /api/stations/{call}/allshows", s.handleListAllShows)
