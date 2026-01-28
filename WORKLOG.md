@@ -109,7 +109,12 @@ DONE: UI polish for iOS Safari.
     - Tape spine accent color changed from red to original orange
     - Audio player progress bar thumb changed from orange to neutral grey
     - Play button icon fixed to render consistently with other transport buttons (text variation selector)
-PROG: Change scheduler implementation so user can schedule via GUI.
+DONE: Change scheduler implementation so user can schedule via GUI.
+    - Server-side scheduler runs in background, evaluates cron expressions
+    - CLI: schedule-download, list-schedules, delete-schedule commands
+    - API: /api/schedules endpoints for CRUD operations
+    - UI: Downloads page shows scheduled downloads with status
+    - Timezone simplified: all times in America/New_York (TZ env var in Docker)
 TODO: build CLI for "station refresh" which will refresh station data
     - Station table needs timezone of station
     - need archive table with historical archive dates _and_ times all in station timezone offset.
