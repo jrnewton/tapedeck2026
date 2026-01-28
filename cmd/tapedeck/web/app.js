@@ -347,7 +347,7 @@ function renderDownloads() {
             month: 'short',
             day: 'numeric',
             timeZone: 'UTC'
-        });
+        }).replace(/,/g, '');
 
         // Determine offline button state
         const isOffline = state.offlineIds.has(download.ID);
