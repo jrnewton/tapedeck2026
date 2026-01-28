@@ -5,4 +5,5 @@ services:
       dockerfile: Dockerfile.test
     container_name: tapedeck-e2e-test
     environment:
+      - TZ=America/New_York
       - E2E_TEST=1
