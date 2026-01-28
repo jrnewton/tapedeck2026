@@ -676,11 +676,12 @@ async function queueDownload() {
 
     const date = 'latest';
 
+    // Disable both buttons while download is in progress
     downloadBtn.disabled = true;
+    scheduleBtn.disabled = true;
     downloadBtn.classList.add('queued');
     downloadBtn.textContent = 'QUEUED';
 
-    let success = false;
     try {
         const response = await fetch('/api/downloads', {
             method: 'POST',
@@ -690,19 +691,56 @@ async function queueDownload() {
 
         if (response.status === 409) {
             debugAlert('This episode is already downloaded or queued');
+            showDownloadResult(false);
         } else if (!response.ok) {
             const error = await response.text();
             debugAlert('Failed to queue download: ' + error);
+            showDownloadResult(false);
         } else {
-            debugLog('Download queued successfully');
-            success = true;
+            const download = await response.json();
+            debugLog('Download queued successfully, ID:', download.ID);
+            // Start polling for completion
+            pollDownloadStatus(download.ID);
         }
     } catch (error) {
         debugError('Failed to queue download:', error);
         debugAlert('Failed to queue download: ' + error.message);
+        showDownloadResult(false);
     }
+}
 
-    // Show success/error briefly, then reset
+// Poll for download completion status
+async function pollDownloadStatus(downloadId) {
+    const poll = async () => {
+        try {
+            const response = await fetch(`/api/downloads/${downloadId}`);
+            if (!response.ok) {
+                debugError('Failed to poll download status:', response.status);
+                showDownloadResult(false);
+                return;
+            }
+
+            const download = await response.json();
+            debugLog('Download status:', download.Status);
+
+            if (download.Status === 'completed') {
+                showDownloadResult(true);
+            } else if (download.Status === 'failed') {
+                showDownloadResult(false);
+            } else {
+                // Still pending or downloading, poll again
+                setTimeout(poll, 2000);
+            }
+        } catch (error) {
+            debugError('Error polling download status:', error);
+            showDownloadResult(false);
+        }
+    };
+    poll();
+}
+
+// Show download result and re-enable buttons
+function showDownloadResult(success) {
     downloadBtn.classList.remove('queued');
     if (success) {
         downloadBtn.classList.add('success');
@@ -714,6 +752,7 @@ async function queueDownload() {
 
     setTimeout(() => {
         downloadBtn.disabled = false;
+        scheduleBtn.disabled = false;
         downloadBtn.classList.remove('success', 'error');
         downloadBtn.textContent = 'LATEST';
     }, 1500);
