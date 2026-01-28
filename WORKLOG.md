@@ -115,13 +115,13 @@ DONE: Change scheduler implementation so user can schedule via GUI.
     - API: /api/schedules endpoints for CRUD operations
     - UI: Downloads page shows scheduled downloads with status
     - Timezone simplified: all times in America/New_York (TZ env var in Docker)
+TODO: disable downloads page in offline mode (eg when using service worker)
+TODO: implement PWA support on android - see pwa-requirements.md
 TODO: build CLI for "station refresh" which will refresh station data
     - Station table needs timezone of station
     - need archive table with historical archive dates _and_ times all in station timezone offset.
     - must handle shows that occur on multiple days.
     - merge "rebroadcast" into same show
-TODO: disable downloads page in offline mode (eg when using service worker)
-TODO: implement PWA support on android - see pwa-requirements.md
 TOOD: performance optimization, improve favicon size, TTL on files, minified css/js.
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Review all test cases and test coverage.
