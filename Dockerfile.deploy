@@ -1,6 +1,8 @@
 # Simplified Dockerfile for pre-built binaries
 # Used by 'make deploy' for fast deployments
 FROM alpine:latest
+RUN apk add --no-cache tzdata
+ENV TZ=America/New_York
 WORKDIR /app
 COPY bin/tapedeck bin/tapedeck-cli ./
 EXPOSE 8080

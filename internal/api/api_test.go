@@ -714,3 +714,128 @@ func TestCreateScheduleWithCron(t *testing.T) {
 		t.Errorf("expected cron '0 12 * * 0', got %s", schedule.CronExpression)
 	}
 }
+
+// Tests for cron description
+
+func TestDescribeCron(t *testing.T) {
+	tests := []struct {
+		name     string
+		cronExpr string
+		want     string
+	}{
+		{
+			name:     "Saturday evening",
+			cronExpr: "30 23 * * 6",
+			want:     "Saturdays at 23:30",
+		},
+		{
+			name:     "Sunday early morning",
+			cronExpr: "30 1 * * 0",
+			want:     "Sundays at 01:30",
+		},
+		{
+			name:     "Monday afternoon",
+			cronExpr: "30 16 * * 1",
+			want:     "Mondays at 16:30",
+		},
+		{
+			name:     "Every day",
+			cronExpr: "0 12 * * *",
+			want:     "Every day at 12:00",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := describeCron(tc.cronExpr)
+			if got != tc.want {
+				t.Errorf("describeCron(%q) = %q, want %q", tc.cronExpr, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDescribeCron_InvalidCron(t *testing.T) {
+	// Should return the original expression if it can't be parsed
+	got := describeCron("invalid")
+	if got != "invalid" {
+		t.Errorf("expected 'invalid', got %q", got)
+	}
+
+	got = describeCron("1 2 3")
+	if got != "1 2 3" {
+		t.Errorf("expected '1 2 3', got %q", got)
+	}
+}
+
+func TestFormatScheduleResponse(t *testing.T) {
+	// Create a schedule with known values
+	// All times are in local time (America/New_York)
+	now := time.Date(2026, 1, 28, 9, 30, 0, 0, time.Local)
+	nextRun := time.Date(2026, 2, 4, 9, 30, 0, 0, time.Local)
+
+	sched := db.Schedule{
+		ID:             1,
+		StationID:      1,
+		ShowID:         1,
+		CronExpression: "30 9 * * 3", // Local time (EST)
+		Enabled:        true,
+		LastRunAt:      &now,
+		NextRunAt:      &nextRun,
+		Station:        "WMBR",
+		Show:           "Test Show",
+	}
+
+	resp := formatScheduleResponse(sched)
+
+	// Check that display strings are populated
+	if resp.CronDescription == "" {
+		t.Error("CronDescription should not be empty")
+	}
+
+	// CronDescription should show the time as-is (no timezone conversion)
+	if !strings.Contains(resp.CronDescription, "09:30") {
+		t.Errorf("CronDescription should show 09:30, got %q", resp.CronDescription)
+	}
+
+	if !strings.Contains(resp.CronDescription, "Wednesdays") {
+		t.Errorf("CronDescription should show Wednesdays, got %q", resp.CronDescription)
+	}
+
+	// LastRunDisplay should show time without timezone label
+	if resp.LastRunDisplay == "-" {
+		t.Error("LastRunDisplay should not be '-' when LastRunAt is set")
+	}
+	if !strings.Contains(resp.LastRunDisplay, "2026-01-28") {
+		t.Errorf("LastRunDisplay should contain date, got %q", resp.LastRunDisplay)
+	}
+
+	// NextRunDisplay should show time without timezone label
+	if resp.NextRunDisplay == "-" {
+		t.Error("NextRunDisplay should not be '-' when NextRunAt is set")
+	}
+	if !strings.Contains(resp.NextRunDisplay, "2026-02-04") {
+		t.Errorf("NextRunDisplay should contain date, got %q", resp.NextRunDisplay)
+	}
+}
+
+func TestFormatScheduleResponse_NilTimes(t *testing.T) {
+	sched := db.Schedule{
+		ID:             1,
+		CronExpression: "30 9 * * 3",
+		LastRunAt:      nil,
+		NextRunAt:      nil,
+		Station:        "WMBR",
+		Show:           "Test Show",
+	}
+
+	resp := formatScheduleResponse(sched)
+
+	if resp.LastRunDisplay != "-" {
+		t.Errorf("LastRunDisplay should be '-' when LastRunAt is nil, got %q", resp.LastRunDisplay)
+	}
+
+	if resp.NextRunDisplay != "-" {
+		t.Errorf("NextRunDisplay should be '-' when NextRunAt is nil, got %q", resp.NextRunDisplay)
+	}
+}

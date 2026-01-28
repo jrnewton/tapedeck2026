@@ -373,10 +373,10 @@ func TestAdapter_GetShowSchedule_ConsistentSchedule(t *testing.T) {
 		t.Error("expected MultiplePerWeek to be false")
 	}
 
-	// Download time should be 04:30 UTC on Sunday (21:00 EST + 2.5h = 23:30 EST = 04:30 UTC next day)
-	// Cron is now stored in UTC
-	if schedule.RecommendedCron != "30 4 * * 0" {
-		t.Errorf("expected cron '30 4 * * 0' (UTC), got %q", schedule.RecommendedCron)
+	// Download time should be 23:30 EST on Saturday (21:00 EST + 2.5h = 23:30 EST)
+	// Cron is now stored in local time (America/New_York)
+	if schedule.RecommendedCron != "30 23 * * 6" {
+		t.Errorf("expected cron '30 23 * * 6' (EST), got %q", schedule.RecommendedCron)
 	}
 }
 
@@ -413,10 +413,10 @@ func TestAdapter_GetShowSchedule_LateNightRollover(t *testing.T) {
 	}
 
 	// Night Owl airs Sunday at 23:00 EST
-	// Download time: 23:00 EST + 2:30 = 01:30 EST Monday = 06:30 UTC Monday
-	// Cron is now stored in UTC
-	if schedule.RecommendedCron != "30 6 * * 1" {
-		t.Errorf("expected cron '30 6 * * 1' (UTC), got %q", schedule.RecommendedCron)
+	// Download time: 23:00 EST + 2:30 = 01:30 EST Monday
+	// Cron is now stored in local time (America/New_York)
+	if schedule.RecommendedCron != "30 1 * * 1" {
+		t.Errorf("expected cron '30 1 * * 1' (EST), got %q", schedule.RecommendedCron)
 	}
 }
 
@@ -449,23 +449,23 @@ func TestAdapter_GetShowSchedule_MultiplePerWeek(t *testing.T) {
 }
 
 func TestCalculateDownloadTime(t *testing.T) {
-	// All expected values are in UTC (EST + 5 hours)
+	// All expected values are in local time (America/New_York)
 	tests := []struct {
 		name      string
 		startTime string
 		day       time.Weekday
 		expected  string
 	}{
-		// 21:00 EST + 2:30 = 23:30 EST = 04:30 UTC next day (Saturday)
-		{"Normal evening", "21:00", time.Friday, "30 4 * * 6"},
-		// 23:00 EST + 2:30 = 01:30 EST (Sun->Mon) = 06:30 UTC Monday
-		{"Late night rollover", "23:00", time.Saturday, "30 6 * * 0"},
-		// 14:00 EST + 2:30 = 16:30 EST = 21:30 UTC same day
-		{"Afternoon", "14:00", time.Monday, "30 21 * * 1"},
-		// 06:00 EST + 2:30 = 08:30 EST = 13:30 UTC same day
-		{"Early morning", "06:00", time.Wednesday, "30 13 * * 3"},
-		// 21:45 EST + 2:30 = 00:15 EST next day = 05:15 UTC same weekday as EST next day
-		{"With minutes", "21:45", time.Tuesday, "15 5 * * 3"},
+		// 21:00 EST + 2:30 = 23:30 EST same day (Friday)
+		{"Normal evening", "21:00", time.Friday, "30 23 * * 5"},
+		// 23:00 EST + 2:30 = 01:30 EST (Sat->Sun)
+		{"Late night rollover", "23:00", time.Saturday, "30 1 * * 0"},
+		// 14:00 EST + 2:30 = 16:30 EST same day
+		{"Afternoon", "14:00", time.Monday, "30 16 * * 1"},
+		// 06:00 EST + 2:30 = 08:30 EST same day
+		{"Early morning", "06:00", time.Wednesday, "30 8 * * 3"},
+		// 21:45 EST + 2:30 = 00:15 EST next day (Tuesday->Wednesday)
+		{"With minutes", "21:45", time.Tuesday, "15 0 * * 3"},
 	}
 
 	for _, tc := range tests {

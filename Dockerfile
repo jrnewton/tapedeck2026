@@ -9,6 +9,8 @@ RUN go build -o tapedeck ./cmd/tapedeck
 RUN go build -o tapedeck-cli ./cmd/tapedeck-cli
 
 FROM alpine:latest
+RUN apk add --no-cache tzdata
+ENV TZ=America/New_York
 WORKDIR /app
 COPY --from=builder /app/tapedeck .
 COPY --from=builder /app/tapedeck-cli .
