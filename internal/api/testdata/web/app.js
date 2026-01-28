@@ -509,7 +509,7 @@ function updateNowPlaying() {
 
     const download = state.currentDownload;
     const date = new Date(download.ArchiveDate);
-    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).replace(/,/g, '');
     nowPlaying.textContent = `${download.Show} · ${dateStr}`;
 }
 
