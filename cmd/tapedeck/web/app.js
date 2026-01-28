@@ -790,7 +790,10 @@ async function loadSchedules() {
 
 // Render schedules list
 function renderSchedules() {
-    schedulesList.innerHTML = '';
+    // Clear existing content safely
+    while (schedulesList.firstChild) {
+        schedulesList.removeChild(schedulesList.firstChild);
+    }
 
     if (state.schedules.length === 0) {
         const emptyMsg = document.createElement('p');
@@ -813,16 +816,22 @@ function renderSchedules() {
 
         const schedCron = document.createElement('div');
         schedCron.className = 'schedule-cron';
-        schedCron.textContent = formatCron(sched.CronExpression);
+        // Use backend-provided CronDescription, fallback to local formatCron
+        schedCron.textContent = sched.CronDescription || formatCron(sched.CronExpression);
 
         const schedTimes = document.createElement('div');
         schedTimes.className = 'schedule-times';
-        const lastRun = sched.LastRunAt
-            ? new Date(sched.LastRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : 'Never';
-        const nextRun = sched.NextRunAt
-            ? new Date(sched.NextRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-            : 'N/A';
+        // Use backend-provided display strings, with fallbacks
+        const lastRun = sched.LastRunDisplay && sched.LastRunDisplay !== '-'
+            ? sched.LastRunDisplay
+            : (sched.LastRunAt
+                ? new Date(sched.LastRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : 'Never');
+        const nextRun = sched.NextRunDisplay && sched.NextRunDisplay !== '-'
+            ? sched.NextRunDisplay
+            : (sched.NextRunAt
+                ? new Date(sched.NextRunAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : 'N/A');
         schedTimes.textContent = `Last: ${lastRun} · Next: ${nextRun}`;
 
         schedInfo.appendChild(schedShow);

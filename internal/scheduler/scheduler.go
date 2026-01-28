@@ -122,7 +122,7 @@ func (s *Scheduler) Stop() {
 
 // runDue checks for and executes due schedules.
 func (s *Scheduler) runDue() {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// Check for retries first
 	retries, err := s.db.ListRetrySchedules(now)
@@ -280,13 +280,14 @@ func (s *Scheduler) calculateRetryDelay(retryCount int) time.Duration {
 }
 
 // calculateNextRun calculates the next run time for a cron expression.
+// Cron expressions are stored in UTC, so we use UTC for calculation.
 func (s *Scheduler) calculateNextRun(cronExpr string) *time.Time {
 	schedule, err := s.parser.Parse(cronExpr)
 	if err != nil {
 		log.Printf("Scheduler: error parsing cron expression %q: %v", cronExpr, err)
 		return nil
 	}
-	next := schedule.Next(time.Now())
+	next := schedule.Next(time.Now().UTC())
 	return &next
 }
 

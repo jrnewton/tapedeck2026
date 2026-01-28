@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,14 @@ import (
 	"local/tapedeck/internal/db"
 	"local/tapedeck/pkg/tapedeck"
 )
+
+// ScheduleResponse extends db.Schedule with pre-formatted display strings.
+type ScheduleResponse struct {
+	db.Schedule
+	CronDescription string `json:"CronDescription"` // e.g., "Wednesdays at 09:30 EST"
+	LastRunDisplay  string `json:"LastRunDisplay"`  // e.g., "2026-01-28 09:30 EST"
+	NextRunDisplay  string `json:"NextRunDisplay"`  // e.g., "2026-02-04 09:30 EST"
+}
 
 // Scheduler interface for schedule management.
 type Scheduler interface {
@@ -397,12 +406,19 @@ func (s *Server) handleListSchedules(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure we return [] instead of null
-	if schedules == nil {
-		schedules = []db.Schedule{}
+	// Convert to response format with display strings
+	responses := make([]ScheduleResponse, 0, len(schedules))
+	for _, sched := range schedules {
+		// Look up station timezone
+		station, err := s.DB.GetStation(sched.Station)
+		timezone := "America/New_York" // default
+		if err == nil && station.Timezone != "" {
+			timezone = station.Timezone
+		}
+		responses = append(responses, formatScheduleResponse(sched, timezone))
 	}
 
-	writeJSON(w, map[string]any{"schedules": schedules})
+	writeJSON(w, map[string]any{"schedules": responses})
 }
 
 // handleCreateSchedule creates a new schedule.
@@ -474,8 +490,14 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get timezone for response formatting
+	timezone := "America/New_York"
+	if station.Timezone != "" {
+		timezone = station.Timezone
+	}
+
 	w.WriteHeader(http.StatusCreated)
-	writeJSON(w, sched)
+	writeJSON(w, formatScheduleResponse(*sched, timezone))
 }
 
 // handleGetSchedule returns a single schedule by ID.
@@ -498,7 +520,14 @@ func (s *Server) handleGetSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, sched)
+	// Look up station timezone
+	station, stationErr := s.DB.GetStation(sched.Station)
+	timezone := "America/New_York" // default
+	if stationErr == nil && station.Timezone != "" {
+		timezone = station.Timezone
+	}
+
+	writeJSON(w, formatScheduleResponse(*sched, timezone))
 }
 
 // handleDeleteSchedule removes a schedule.
@@ -561,7 +590,14 @@ func (s *Server) handleUpdateSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, sched)
+	// Look up station timezone
+	station, stationErr := s.DB.GetStation(sched.Station)
+	timezone := "America/New_York" // default
+	if stationErr == nil && station.Timezone != "" {
+		timezone = station.Timezone
+	}
+
+	writeJSON(w, formatScheduleResponse(*sched, timezone))
 }
 
 // writeJSON writes a JSON response.
@@ -570,4 +606,107 @@ func writeJSON(w http.ResponseWriter, data any) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// formatScheduleResponse converts a db.Schedule to ScheduleResponse with display strings.
+// timezone is the station's IANA timezone (e.g., "America/New_York").
+func formatScheduleResponse(sched db.Schedule, timezone string) ScheduleResponse {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		// Fallback to UTC if timezone is invalid
+		loc = time.UTC
+		timezone = "UTC"
+	}
+
+	// Get timezone abbreviation (EST/EDT)
+	tzAbbrev := getTimezoneAbbrev(loc)
+
+	resp := ScheduleResponse{
+		Schedule:        sched,
+		CronDescription: describeCronInTimezone(sched.CronExpression, loc, tzAbbrev),
+		LastRunDisplay:  "-",
+		NextRunDisplay:  "-",
+	}
+
+	if sched.LastRunAt != nil {
+		localTime := sched.LastRunAt.In(loc)
+		resp.LastRunDisplay = fmt.Sprintf("%s %s", localTime.Format("2006-01-02 15:04"), tzAbbrev)
+	}
+
+	if sched.NextRunAt != nil {
+		localTime := sched.NextRunAt.In(loc)
+		resp.NextRunDisplay = fmt.Sprintf("%s %s", localTime.Format("2006-01-02 15:04"), tzAbbrev)
+	}
+
+	return resp
+}
+
+// getTimezoneAbbrev returns the timezone abbreviation (e.g., EST, EDT) for the given location.
+func getTimezoneAbbrev(loc *time.Location) string {
+	// Use current time to determine DST status
+	abbrev, _ := time.Now().In(loc).Zone()
+	return abbrev
+}
+
+// describeCronInTimezone converts a UTC cron expression to a human-readable description
+// in the specified timezone.
+func describeCronInTimezone(cronExpr string, loc *time.Location, tzAbbrev string) string {
+	parts := strings.Fields(cronExpr)
+	if len(parts) < 5 {
+		return cronExpr
+	}
+
+	min, _ := strconv.Atoi(parts[0])
+	hour, _ := strconv.Atoi(parts[1])
+	dow := parts[4]
+
+	// Convert UTC time to local timezone
+	// Create a reference time in UTC and convert to local
+	utcTime := time.Date(2000, 1, 2, hour, min, 0, 0, time.UTC) // Jan 2, 2000 is a Sunday (dow=0)
+	localTime := utcTime.In(loc)
+
+	localHour := localTime.Hour()
+	localMin := localTime.Minute()
+
+	// Calculate day offset (negative means previous day, positive means next day)
+	dayOffset := 0
+	if localTime.Day() != utcTime.Day() {
+		if localTime.Day() < utcTime.Day() {
+			dayOffset = -1
+		} else {
+			dayOffset = 1
+		}
+	}
+
+	// Format time
+	timeStr := fmt.Sprintf("%02d:%02d", localHour, localMin)
+
+	// Day of week names
+	days := map[string]string{
+		"0": "Sundays",
+		"1": "Mondays",
+		"2": "Tuesdays",
+		"3": "Wednesdays",
+		"4": "Thursdays",
+		"5": "Fridays",
+		"6": "Saturdays",
+		"7": "Sundays", // Some systems use 7 for Sunday
+		"*": "Every day",
+	}
+
+	dayStr, ok := days[dow]
+	if !ok {
+		dayStr = "day " + dow
+	}
+
+	// Adjust day of week for timezone offset
+	if dow != "*" && dayOffset != 0 {
+		dowNum, err := strconv.Atoi(dow)
+		if err == nil {
+			adjustedDow := (dowNum + dayOffset + 7) % 7
+			dayStr = days[strconv.Itoa(adjustedDow)]
+		}
+	}
+
+	return fmt.Sprintf("%s at %s %s", dayStr, timeStr, tzAbbrev)
 }

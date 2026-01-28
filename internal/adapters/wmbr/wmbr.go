@@ -360,13 +360,14 @@ func analyzeSchedule(show string, archives []tapedeck.Archive) (*tapedeck.Schedu
 	}, nil
 }
 
-// calculateDownloadTime adds 2.5 hours to the broadcast start time and returns cron format.
+// calculateDownloadTime adds 2.5 hours to the broadcast start time (in EST) and returns
+// a cron expression in UTC. This ensures the cron runs correctly regardless of server timezone.
 // Handles late-night rollover to next day.
 func calculateDownloadTime(startTime string, day time.Weekday) string {
 	// Parse start time
 	parts := strings.Split(startTime, ":")
 	if len(parts) != 2 {
-		return "30 23 * * " + fmt.Sprintf("%d", day) // fallback
+		return "30 4 * * " + fmt.Sprintf("%d", day) // fallback in UTC
 	}
 
 	hour, _ := strconv.Atoi(parts[0])
@@ -384,6 +385,16 @@ func calculateDownloadTime(startTime string, day time.Weekday) string {
 	if hour >= 24 {
 		hour -= 24
 		downloadDay = (day + 1) % 7
+	}
+
+	// Convert EST to UTC by adding 5 hours
+	// Note: This is a simplification that doesn't handle DST transitions,
+	// but for weekly schedules, the slight drift during DST changes is acceptable.
+	// EST = UTC-5, so to convert EST to UTC, we add 5 hours.
+	hour += 5
+	if hour >= 24 {
+		hour -= 24
+		downloadDay = (downloadDay + 1) % 7
 	}
 
 	return fmt.Sprintf("%d %d * * %d", minute, hour, downloadDay)

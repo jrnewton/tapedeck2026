@@ -15,6 +15,7 @@ type Station struct {
 	CallSign   string
 	Name       string
 	ArchiveURL string
+	Timezone   string // IANA timezone, e.g., "America/New_York"
 }
 
 // Show represents a show from a station.
@@ -131,7 +132,8 @@ func (db *DB) migrate() error {
 			id INTEGER PRIMARY KEY,
 			call_sign TEXT UNIQUE NOT NULL,
 			name TEXT,
-			archive_url TEXT
+			archive_url TEXT,
+			timezone TEXT NOT NULL DEFAULT 'America/New_York'
 		);
 
 		CREATE TABLE IF NOT EXISTS shows (
@@ -234,6 +236,23 @@ func (db *DB) migrate() error {
 		return err
 	}
 
+	// Migration: add timezone column to stations
+	var hasTimezone bool
+	err = sqlitex.Execute(conn, `SELECT 1 FROM pragma_table_info('stations') WHERE name='timezone'`, &sqlitex.ExecOptions{
+		ResultFunc: func(stmt *sqlite.Stmt) error {
+			hasTimezone = true
+			return nil
+		},
+	})
+	if err != nil {
+		return err
+	}
+	if !hasTimezone {
+		if err := sqlitex.Execute(conn, `ALTER TABLE stations ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/New_York'`, nil); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -246,13 +265,14 @@ func (db *DB) ListStations() ([]Station, error) {
 	defer db.pool.Put(conn)
 
 	var stations []Station
-	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url FROM stations ORDER BY call_sign`, &sqlitex.ExecOptions{
+	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url, timezone FROM stations ORDER BY call_sign`, &sqlitex.ExecOptions{
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			stations = append(stations, Station{
 				ID:         stmt.ColumnInt64(0),
 				CallSign:   stmt.ColumnText(1),
 				Name:       stmt.ColumnText(2),
 				ArchiveURL: stmt.ColumnText(3),
+				Timezone:   stmt.ColumnText(4),
 			})
 			return nil
 		},
@@ -270,7 +290,7 @@ func (db *DB) GetOrCreateStation(callSign, name, archiveURL string) (*Station, e
 
 	// Try to get existing station
 	var station *Station
-	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url FROM stations WHERE call_sign = ?`, &sqlitex.ExecOptions{
+	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url, timezone FROM stations WHERE call_sign = ?`, &sqlitex.ExecOptions{
 		Args: []any{callSign},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			station = &Station{
@@ -278,6 +298,7 @@ func (db *DB) GetOrCreateStation(callSign, name, archiveURL string) (*Station, e
 				CallSign:   stmt.ColumnText(1),
 				Name:       stmt.ColumnText(2),
 				ArchiveURL: stmt.ColumnText(3),
+				Timezone:   stmt.ColumnText(4),
 			}
 			return nil
 		},
@@ -290,8 +311,8 @@ func (db *DB) GetOrCreateStation(callSign, name, archiveURL string) (*Station, e
 		return station, nil
 	}
 
-	// Create new station
-	err = sqlitex.Execute(conn, `INSERT INTO stations (call_sign, name, archive_url) VALUES (?, ?, ?)`, &sqlitex.ExecOptions{
+	// Create new station (default timezone is America/New_York)
+	err = sqlitex.Execute(conn, `INSERT INTO stations (call_sign, name, archive_url, timezone) VALUES (?, ?, ?, 'America/New_York')`, &sqlitex.ExecOptions{
 		Args: []any{callSign, name, archiveURL},
 	})
 	if err != nil {
@@ -303,6 +324,7 @@ func (db *DB) GetOrCreateStation(callSign, name, archiveURL string) (*Station, e
 		CallSign:   callSign,
 		Name:       name,
 		ArchiveURL: archiveURL,
+		Timezone:   "America/New_York",
 	}, nil
 }
 
@@ -315,7 +337,7 @@ func (db *DB) GetStation(callSign string) (*Station, error) {
 	defer db.pool.Put(conn)
 
 	var station *Station
-	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url FROM stations WHERE call_sign = ?`, &sqlitex.ExecOptions{
+	err = sqlitex.Execute(conn, `SELECT id, call_sign, name, archive_url, timezone FROM stations WHERE call_sign = ?`, &sqlitex.ExecOptions{
 		Args: []any{callSign},
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			station = &Station{
@@ -323,6 +345,7 @@ func (db *DB) GetStation(callSign string) (*Station, error) {
 				CallSign:   stmt.ColumnText(1),
 				Name:       stmt.ColumnText(2),
 				ArchiveURL: stmt.ColumnText(3),
+				Timezone:   stmt.ColumnText(4),
 			}
 			return nil
 		},

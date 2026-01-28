@@ -709,14 +709,17 @@ func cmdListSchedules(args []string) error {
 
 	var result struct {
 		Schedules []struct {
-			ID             int64      `json:"ID"`
-			Station        string     `json:"Station"`
-			Show           string     `json:"Show"`
-			CronExpression string     `json:"CronExpression"`
-			Enabled        bool       `json:"Enabled"`
-			LastRunAt      *time.Time `json:"LastRunAt"`
-			LastStatus     string     `json:"LastStatus"`
-			NextRunAt      *time.Time `json:"NextRunAt"`
+			ID              int64      `json:"ID"`
+			Station         string     `json:"Station"`
+			Show            string     `json:"Show"`
+			CronExpression  string     `json:"CronExpression"`
+			CronDescription string     `json:"CronDescription"` // Pre-formatted from backend
+			Enabled         bool       `json:"Enabled"`
+			LastRunAt       *time.Time `json:"LastRunAt"`
+			LastRunDisplay  string     `json:"LastRunDisplay"` // Pre-formatted from backend
+			LastStatus      string     `json:"LastStatus"`
+			NextRunAt       *time.Time `json:"NextRunAt"`
+			NextRunDisplay  string     `json:"NextRunDisplay"` // Pre-formatted from backend
 		} `json:"schedules"`
 	}
 
@@ -726,14 +729,17 @@ func cmdListSchedules(args []string) error {
 
 	// Filter by station if specified
 	var schedules []struct {
-		ID             int64      `json:"ID"`
-		Station        string     `json:"Station"`
-		Show           string     `json:"Show"`
-		CronExpression string     `json:"CronExpression"`
-		Enabled        bool       `json:"Enabled"`
-		LastRunAt      *time.Time `json:"LastRunAt"`
-		LastStatus     string     `json:"LastStatus"`
-		NextRunAt      *time.Time `json:"NextRunAt"`
+		ID              int64      `json:"ID"`
+		Station         string     `json:"Station"`
+		Show            string     `json:"Show"`
+		CronExpression  string     `json:"CronExpression"`
+		CronDescription string     `json:"CronDescription"`
+		Enabled         bool       `json:"Enabled"`
+		LastRunAt       *time.Time `json:"LastRunAt"`
+		LastRunDisplay  string     `json:"LastRunDisplay"`
+		LastStatus      string     `json:"LastStatus"`
+		NextRunAt       *time.Time `json:"NextRunAt"`
+		NextRunDisplay  string     `json:"NextRunDisplay"`
 	}
 	for _, s := range result.Schedules {
 		if callSign == "" || s.Station == callSign {
@@ -752,9 +758,10 @@ func cmdListSchedules(args []string) error {
 
 	// Print each schedule
 	for _, s := range schedules {
-		lastRun := "(never)"
-		if s.LastRunAt != nil {
-			lastRun = s.LastRunAt.Local().Format("2006-01-02 15:04")
+		// Use backend-provided display strings with fallbacks
+		lastRunDisplay := s.LastRunDisplay
+		if lastRunDisplay == "" || lastRunDisplay == "-" {
+			lastRunDisplay = "(never)"
 		}
 
 		status := "-"
@@ -765,15 +772,21 @@ func cmdListSchedules(args []string) error {
 			status = "disabled"
 		}
 
-		nextRun := "-"
-		if s.NextRunAt != nil {
-			nextRun = s.NextRunAt.Local().Format("2006-01-02 15:04")
+		nextRunDisplay := s.NextRunDisplay
+		if nextRunDisplay == "" {
+			nextRunDisplay = "-"
+		}
+
+		// Use CronDescription from backend, fallback to local describeCron
+		cronDesc := s.CronDescription
+		if cronDesc == "" {
+			cronDesc = describeCron(s.CronExpression)
 		}
 
 		fmt.Printf("[%d] %s - %s\n", s.ID, s.Station, s.Show)
-		fmt.Printf("    Schedule:  %s (%s)\n", describeCron(s.CronExpression), s.CronExpression)
-		fmt.Printf("    Last run:  %s (%s)\n", lastRun, status)
-		fmt.Printf("    Next run:  %s\n", nextRun)
+		fmt.Printf("    Schedule:  %s (%s)\n", cronDesc, s.CronExpression)
+		fmt.Printf("    Last run:  %s (%s)\n", lastRunDisplay, status)
+		fmt.Printf("    Next run:  %s\n", nextRunDisplay)
 		fmt.Println()
 	}
 
