@@ -640,6 +640,23 @@ main {
     cursor: not-allowed;
 }
 
+/* Button row for side-by-side buttons */
+.button-row {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.button-row .action-btn {
+    flex: 1;
+}
+
+/* Section divider */
+.section-divider {
+    border: none;
+    border-top: 2px solid var(--dark-grey);
+    margin: 0;
+}
+
 /* Action buttons */
 .action-btn {
     width: 100%;
@@ -653,6 +670,22 @@ main {
     cursor: pointer;
     transition: all 0.15s ease;
     -webkit-tap-highlight-color: transparent;
+}
+
+/* LATEST button states */
+.action-btn.queued {
+    background-color: var(--light-grey);
+    color: var(--white);
+}
+
+.action-btn.success {
+    background-color: #4a4;
+    color: var(--white);
+}
+
+.action-btn.error {
+    background-color: var(--red);
+    color: var(--white);
 }
 
 /* Only apply hover on devices that support it (not touch) */

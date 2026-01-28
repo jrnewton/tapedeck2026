@@ -12,9 +12,7 @@ const state = {
     // Downloads page state
     currentPage: 'main',        // 'main' or 'downloads'
     allShows: [],               // all shows from adapter (for downloads page)
-    schedules: [],              // scheduled downloads
-    downloadQueue: [],          // queued downloads status
-    pollInterval: null          // interval for polling download status
+    schedules: []               // scheduled downloads
 };
 
 // Debug helpers - only log/alert when debug mode is enabled
@@ -146,9 +144,6 @@ const backBtn = document.getElementById('back-btn');
 const dlStationSelect = document.getElementById('dl-station-select');
 const dlShowSelect = document.getElementById('dl-show-select');
 const downloadBtn = document.getElementById('download-btn');
-const downloadStatusList = document.getElementById('download-status-list');
-const schedStationSelect = document.getElementById('sched-station-select');
-const schedShowSelect = document.getElementById('sched-show-select');
 const scheduleBtn = document.getElementById('schedule-btn');
 const schedulesList = document.getElementById('schedules-list');
 
@@ -594,8 +589,6 @@ function showPage(page) {
         const params = getURLParams();
         params.set('page', 'downloads');
         updateURL(params);
-        // Start polling download status
-        startStatusPolling();
         // Load data
         loadDownloadsPageData();
     } else {
@@ -607,37 +600,38 @@ function showPage(page) {
         const params = getURLParams();
         params.delete('page');
         updateURL(params);
-        // Stop polling
-        stopStatusPolling();
     }
 }
 
 // Load all data needed for downloads page
 async function loadDownloadsPageData() {
-    // Populate station selects with registered stations
+    // Populate station select with registered stations
     await populateDownloadStations();
     // Load schedules
     await loadSchedules();
-    // Load current download queue status
-    await loadDownloadStatus();
 }
 
-// Populate station dropdowns on downloads page
+// Populate station dropdown on downloads page
 async function populateDownloadStations() {
     // Use the same stations from main page
     if (state.stations.length === 0) {
         await loadStations();
     }
 
-    // Populate both station selects
-    [dlStationSelect, schedStationSelect].forEach(select => {
-        select.innerHTML = '<option value="">Station...</option>';
-        state.stations.forEach(station => {
-            const option = document.createElement('option');
-            option.value = station.CallSign;
-            option.textContent = station.CallSign + (station.Name ? ` - ${station.Name}` : '');
-            select.appendChild(option);
-        });
+    // Populate station select (using DOM methods to avoid innerHTML)
+    while (dlStationSelect.firstChild) {
+        dlStationSelect.removeChild(dlStationSelect.firstChild);
+    }
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    defaultOption.textContent = 'Station...';
+    dlStationSelect.appendChild(defaultOption);
+
+    state.stations.forEach(station => {
+        const option = document.createElement('option');
+        option.value = station.CallSign;
+        option.textContent = station.CallSign + (station.Name ? ` - ${station.Name}` : '');
+        dlStationSelect.appendChild(option);
     });
 }
 
@@ -670,66 +664,6 @@ function renderAllShowsDropdown(selectElement) {
     });
 }
 
-// Load download queue status
-async function loadDownloadStatus() {
-    try {
-        const response = await fetch('/api/downloads');
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        state.downloadQueue = await response.json();
-        // Only show recent downloads (last 10)
-        state.downloadQueue = state.downloadQueue.slice(0, 10);
-        renderDownloadStatus();
-    } catch (error) {
-        debugError('Failed to load download status:', error);
-        state.downloadQueue = [];
-        renderDownloadStatus();
-    }
-}
-
-// Render download status list
-function renderDownloadStatus() {
-    downloadStatusList.innerHTML = '';
-
-    if (state.downloadQueue.length === 0) {
-        return;
-    }
-
-    state.downloadQueue.forEach(dl => {
-        const item = document.createElement('div');
-        item.className = 'status-item';
-
-        const statusInfo = document.createElement('div');
-        statusInfo.className = 'status-info';
-
-        const statusShow = document.createElement('div');
-        statusShow.className = 'status-show';
-        statusShow.textContent = `${dl.Station} - ${dl.Show}`;
-
-        const statusDate = document.createElement('div');
-        statusDate.className = 'status-date';
-        const date = new Date(dl.ArchiveDate);
-        statusDate.textContent = date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            timeZone: 'UTC'
-        });
-
-        statusInfo.appendChild(statusShow);
-        statusInfo.appendChild(statusDate);
-
-        const badge = document.createElement('span');
-        badge.className = `status-badge ${dl.Status}`;
-        badge.textContent = dl.Status;
-
-        item.appendChild(statusInfo);
-        item.appendChild(badge);
-        downloadStatusList.appendChild(item);
-    });
-}
-
 // Queue a download
 async function queueDownload() {
     const station = dlStationSelect.value;
@@ -743,8 +677,10 @@ async function queueDownload() {
     const date = 'latest';
 
     downloadBtn.disabled = true;
-    downloadBtn.textContent = 'QUEUING...';
+    downloadBtn.classList.add('queued');
+    downloadBtn.textContent = 'QUEUED';
 
+    let success = false;
     try {
         const response = await fetch('/api/downloads', {
             method: 'POST',
@@ -759,17 +695,28 @@ async function queueDownload() {
             debugAlert('Failed to queue download: ' + error);
         } else {
             debugLog('Download queued successfully');
+            success = true;
         }
-
-        // Refresh status
-        await loadDownloadStatus();
     } catch (error) {
         debugError('Failed to queue download:', error);
         debugAlert('Failed to queue download: ' + error.message);
-    } finally {
-        downloadBtn.disabled = false;
-        downloadBtn.textContent = 'DOWNLOAD';
     }
+
+    // Show success/error briefly, then reset
+    downloadBtn.classList.remove('queued');
+    if (success) {
+        downloadBtn.classList.add('success');
+        downloadBtn.textContent = '\u2713'; // ✓
+    } else {
+        downloadBtn.classList.add('error');
+        downloadBtn.textContent = '\u2717'; // ✗
+    }
+
+    setTimeout(() => {
+        downloadBtn.disabled = false;
+        downloadBtn.classList.remove('success', 'error');
+        downloadBtn.textContent = 'LATEST';
+    }, 1500);
 }
 
 // Load schedules
@@ -868,8 +815,8 @@ function formatCron(cronExpr) {
 
 // Create a schedule
 async function createSchedule() {
-    const station = schedStationSelect.value;
-    const show = schedShowSelect.value;
+    const station = dlStationSelect.value;
+    const show = dlShowSelect.value;
 
     if (!station || !show) {
         debugAlert('Please select a station and show');
@@ -877,8 +824,10 @@ async function createSchedule() {
     }
 
     scheduleBtn.disabled = true;
-    scheduleBtn.textContent = 'SCHEDULING...';
+    scheduleBtn.classList.add('queued');
+    scheduleBtn.textContent = 'SAVING...';
 
+    let success = false;
     try {
         const response = await fetch('/api/schedules', {
             method: 'POST',
@@ -893,6 +842,7 @@ async function createSchedule() {
             debugAlert('Failed to create schedule: ' + error);
         } else {
             debugLog('Schedule created successfully');
+            success = true;
         }
 
         // Refresh schedules
@@ -900,10 +850,23 @@ async function createSchedule() {
     } catch (error) {
         debugError('Failed to create schedule:', error);
         debugAlert('Failed to create schedule: ' + error.message);
-    } finally {
-        scheduleBtn.disabled = false;
-        scheduleBtn.textContent = 'SCHEDULE';
     }
+
+    // Show success/error briefly, then reset
+    scheduleBtn.classList.remove('queued');
+    if (success) {
+        scheduleBtn.classList.add('success');
+        scheduleBtn.textContent = '\u2713'; // ✓
+    } else {
+        scheduleBtn.classList.add('error');
+        scheduleBtn.textContent = '\u2717'; // ✗
+    }
+
+    setTimeout(() => {
+        scheduleBtn.disabled = false;
+        scheduleBtn.classList.remove('success', 'error');
+        scheduleBtn.textContent = 'SCHEDULE';
+    }, 1500);
 }
 
 // Delete a schedule
@@ -928,22 +891,6 @@ async function deleteSchedule(id) {
     }
 }
 
-// Polling for download status updates
-function startStatusPolling() {
-    if (state.pollInterval) return;
-    state.pollInterval = setInterval(() => {
-        if (state.currentPage === 'downloads') {
-            loadDownloadStatus();
-        }
-    }, 5000);
-}
-
-function stopStatusPolling() {
-    if (state.pollInterval) {
-        clearInterval(state.pollInterval);
-        state.pollInterval = null;
-    }
-}
 
 // Event Listeners
 function setupEventListeners() {
@@ -1089,21 +1036,12 @@ function setupEventListeners() {
             renderAllShowsDropdown(dlShowSelect);
         } else {
             state.allShows = [];
-            dlShowSelect.innerHTML = '<option value="">Select show...</option>';
+            dlShowSelect.textContent = '';
+            const opt = document.createElement('option');
+            opt.value = '';
+            opt.textContent = 'Select show...';
+            dlShowSelect.appendChild(opt);
             dlShowSelect.disabled = true;
-        }
-    });
-
-    // Schedule section - station change loads all shows
-    schedStationSelect.addEventListener('change', async (e) => {
-        const callSign = e.target.value;
-        if (callSign) {
-            await loadAllShows(callSign);
-            renderAllShowsDropdown(schedShowSelect);
-        } else {
-            state.allShows = [];
-            schedShowSelect.innerHTML = '<option value="">Select show...</option>';
-            schedShowSelect.disabled = true;
         }
     });
 

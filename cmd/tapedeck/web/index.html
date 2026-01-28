@@ -58,9 +58,9 @@
             <h2>DOWNLOADS</h2>
         </div>
 
-        <!-- Section 4a: Ad-hoc Downloads -->
+        <!-- Download Episode Section -->
         <section class="download-section">
-            <h3>DOWNLOAD LATEST EPISODE</h3>
+            <h3>DOWNLOAD EPISODES</h3>
             <div class="form-group">
                 <select id="dl-station-select">
                     <option value="">Station...</option>
@@ -71,24 +71,17 @@
                     <option value="">Select show...</option>
                 </select>
             </div>
-            <button id="download-btn" class="action-btn">DOWNLOAD</button>
-            <div id="download-status-list" class="status-list"></div>
+            <div class="button-row">
+                <button id="download-btn" class="action-btn">LATEST</button>
+                <button id="schedule-btn" class="action-btn">SCHEDULE</button>
+            </div>
         </section>
 
-        <!-- Section 4b: Scheduled Downloads -->
+        <hr class="section-divider">
+
+        <!-- Scheduled Downloads List -->
         <section class="download-section">
             <h3>SCHEDULED DOWNLOADS</h3>
-            <div class="form-group">
-                <select id="sched-station-select">
-                    <option value="">Station...</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <select id="sched-show-select" disabled>
-                    <option value="">Select show...</option>
-                </select>
-            </div>
-            <button id="schedule-btn" class="action-btn">SCHEDULE</button>
             <div id="schedules-list" class="schedules-list"></div>
         </section>
     </div>
