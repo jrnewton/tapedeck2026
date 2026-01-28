@@ -654,14 +654,19 @@ main {
     color: var(--black);
     cursor: pointer;
     transition: all 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.action-btn:hover {
-    background-color: var(--yellow);
+/* Only apply hover on devices that support it (not touch) */
+@media (hover: hover) {
+    .action-btn:hover {
+        background-color: var(--yellow);
+    }
 }
 
 .action-btn:active {
     transform: translateY(2px);
+    background-color: var(--yellow);
 }
 
 .action-btn:disabled {

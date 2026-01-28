@@ -96,6 +96,7 @@ async function applyURLState() {
     // Ensure we're on main page
     if (state.currentPage !== 'main') {
         mainView.classList.remove('hidden');
+        miniPlayer.classList.remove('hidden');
         downloadsView.classList.add('hidden');
         state.currentPage = 'main';
     }
@@ -139,6 +140,7 @@ const modalClose = document.getElementById('modal-close');
 // Downloads page DOM elements
 const mainView = document.getElementById('main-view');
 const downloadsView = document.getElementById('downloads-view');
+const miniPlayer = document.querySelector('.mini-player');
 const btnRecord = document.getElementById('btn-record');
 const backBtn = document.getElementById('back-btn');
 const dlStationSelect = document.getElementById('dl-station-select');
@@ -586,6 +588,7 @@ function showPage(page) {
 
     if (page === 'downloads') {
         mainView.classList.add('hidden');
+        miniPlayer.classList.add('hidden');
         downloadsView.classList.remove('hidden');
         // Update URL
         const params = getURLParams();
@@ -598,6 +601,7 @@ function showPage(page) {
     } else {
         downloadsView.classList.add('hidden');
         mainView.classList.remove('hidden');
+        miniPlayer.classList.remove('hidden');
         // Remove page param from URL
         const params = getURLParams();
         params.delete('page');
