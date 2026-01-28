@@ -543,23 +543,21 @@ main {
 
 .downloads-header h2 {
     color: var(--black);
-    font-size: 1.2rem;
-    letter-spacing: 0.1rem;
+    font-size: 1.4rem;
+    letter-spacing: 0.15rem;
+    text-shadow: 1px 1px 0 var(--orange);
 }
 
 .back-btn {
-    width: 44px;
-    height: 44px;
+    padding: 0.3rem 0.6rem;
     background: var(--white);
     border: 2px solid var(--black);
     border-radius: 4px;
     font-family: 'Audiowide', sans-serif;
-    font-size: 1.2rem;
+    font-size: 0.6rem;
     color: var(--black);
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    text-decoration: none;
 }
 
 .back-btn:hover {
