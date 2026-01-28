@@ -667,9 +667,10 @@ func TestE2EErrorModalOnDuplicateDownload(t *testing.T) {
 		// Select station
 		chromedp.SetValue(`#dl-station-select`, "WMBR", chromedp.ByID),
 		chromedp.Evaluate(`document.getElementById('dl-station-select').dispatchEvent(new Event('change'))`, nil),
-		chromedp.Sleep(500*time.Millisecond),
+		chromedp.Sleep(1000*time.Millisecond),
 
-		// Select show
+		// Wait for show dropdown to be enabled and select show
+		chromedp.WaitEnabled(`#dl-show-select`, chromedp.ByID),
 		chromedp.SetValue(`#dl-show-select`, "Backwoods", chromedp.ByID),
 		chromedp.Sleep(200*time.Millisecond),
 
@@ -747,9 +748,10 @@ func TestE2EErrorModalOnDuplicateSchedule(t *testing.T) {
 		// Select station
 		chromedp.SetValue(`#dl-station-select`, "WMBR", chromedp.ByID),
 		chromedp.Evaluate(`document.getElementById('dl-station-select').dispatchEvent(new Event('change'))`, nil),
-		chromedp.Sleep(500*time.Millisecond),
+		chromedp.Sleep(1000*time.Millisecond),
 
-		// Select show
+		// Wait for show dropdown to be enabled and select show
+		chromedp.WaitEnabled(`#dl-show-select`, chromedp.ByID),
 		chromedp.SetValue(`#dl-show-select`, "Backwoods", chromedp.ByID),
 		chromedp.Sleep(200*time.Millisecond),
 

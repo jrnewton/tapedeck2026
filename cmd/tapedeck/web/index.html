@@ -44,15 +44,6 @@
             </div>
         </div>
 
-        <!-- Error Modal Overlay -->
-        <div id="error-modal" class="modal-overlay hidden">
-            <div class="modal-content">
-                <button id="error-modal-close" class="modal-close">&times;</button>
-                <h2>Error</h2>
-                <p id="error-modal-message"></p>
-            </div>
-        </div>
-
         <main>
             <div id="tape-list" class="tape-list">
                 <p class="empty-message">Select a station and show to view downloads</p>
@@ -93,6 +84,15 @@
             <h3>SCHEDULED DOWNLOADS</h3>
             <div id="schedules-list" class="schedules-list"></div>
         </section>
+    </div>
+
+    <!-- Error Modal Overlay (outside views so always visible) -->
+    <div id="error-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button id="error-modal-close" class="modal-close">&times;</button>
+            <h2>Error</h2>
+            <p id="error-modal-message"></p>
+        </div>
     </div>
 
     <div class="mini-player">
