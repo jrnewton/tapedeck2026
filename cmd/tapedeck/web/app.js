@@ -145,7 +145,6 @@ const btnRecord = document.getElementById('btn-record');
 const backBtn = document.getElementById('back-btn');
 const dlStationSelect = document.getElementById('dl-station-select');
 const dlShowSelect = document.getElementById('dl-show-select');
-const dlDate = document.getElementById('dl-date');
 const downloadBtn = document.getElementById('download-btn');
 const downloadStatusList = document.getElementById('download-status-list');
 const schedStationSelect = document.getElementById('sched-station-select');
@@ -735,18 +734,13 @@ function renderDownloadStatus() {
 async function queueDownload() {
     const station = dlStationSelect.value;
     const show = dlShowSelect.value;
-    const dateMode = document.querySelector('input[name="date-mode"]:checked').value;
-    const date = dateMode === 'latest' ? 'latest' : dlDate.value;
 
     if (!station || !show) {
         debugAlert('Please select a station and show');
         return;
     }
 
-    if (dateMode === 'pick' && !date) {
-        debugAlert('Please select a date');
-        return;
-    }
+    const date = 'latest';
 
     downloadBtn.disabled = true;
     downloadBtn.textContent = 'QUEUING...';
@@ -1111,13 +1105,6 @@ function setupEventListeners() {
             schedShowSelect.innerHTML = '<option value="">Select show...</option>';
             schedShowSelect.disabled = true;
         }
-    });
-
-    // Date picker radio buttons
-    document.querySelectorAll('input[name="date-mode"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-            dlDate.disabled = e.target.value === 'latest';
-        });
     });
 
     // Action buttons
