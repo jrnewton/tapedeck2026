@@ -13,10 +13,11 @@ help:
 	@echo "  clean     Remove build artifacts"
 	@echo "  deploy    Deploy to DigitalOcean droplet"
 
-# Build the server binary
+# Build the server binary (local dev)
 build:
-	go build -o tapedeck ./cmd/tapedeck
-	go build -o tapedeck-cli ./cmd/tapedeck-cli
+	@mkdir -p bin/test
+	go build -o bin/test/tapedeck ./cmd/tapedeck
+	go build -o bin/test/tapedeck-cli ./cmd/tapedeck-cli
 
 # Run the server via Docker Compose
 run:
@@ -40,7 +41,7 @@ test-e2e:
 
 # Clean build artifacts
 clean:
-	rm -f tapedeck tapedeck-cli
+	rm -rf bin/
 	go clean -cache
 
 # Deploy to DigitalOcean droplet
@@ -50,12 +51,12 @@ REMOTE_PATH := /opt/tapedeck
 
 deploy:
 	@echo "Cross-compiling for Linux (static binary)..."
-	@mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/tapedeck ./cmd/tapedeck
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/tapedeck-cli ./cmd/tapedeck-cli
+	@mkdir -p bin/prod
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/prod/tapedeck ./cmd/tapedeck
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/prod/tapedeck-cli ./cmd/tapedeck-cli
 	@echo "Syncing to DigitalOcean..."
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
-		bin/ $(DROPLET):$(REMOTE_PATH)/bin/
+		bin/prod/ $(DROPLET):$(REMOTE_PATH)/bin/
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
 		cmd/tapedeck/web/ $(DROPLET):$(REMOTE_PATH)/cmd/tapedeck/web/
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \

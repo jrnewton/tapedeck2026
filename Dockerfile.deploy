@@ -4,6 +4,6 @@ FROM alpine:latest
 RUN apk add --no-cache tzdata
 ENV TZ=America/New_York
 WORKDIR /app
-COPY bin/tapedeck bin/tapedeck-cli ./
+COPY bin/prod/tapedeck bin/prod/tapedeck-cli ./
 EXPOSE 8080
 CMD ["./tapedeck"]
