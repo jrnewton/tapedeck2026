@@ -355,13 +355,14 @@ function renderDownloads() {
         const isOffline = state.offlineIds.has(download.ID);
         const isDownloading = state.downloadingIds.has(download.ID);
         let btnClass = 'offline-btn';
-        let btnContent = '\u2B73'; // Download icon ⭳
+        const svgIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>';
+        let btnContent = svgIcon;
         if (isDownloading) {
             btnClass += ' downloading';
             btnContent = ''; // Spinner via CSS
         } else if (isOffline) {
             btnClass += ' saved';
-            btnContent = '\u2B73'; // Same icon, color changes via CSS
+            btnContent = svgIcon; // Same icon, color changes via CSS
         }
 
         spine.innerHTML = `
