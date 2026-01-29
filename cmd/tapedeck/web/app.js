@@ -355,13 +355,13 @@ function renderDownloads() {
         const isOffline = state.offlineIds.has(download.ID);
         const isDownloading = state.downloadingIds.has(download.ID);
         let btnClass = 'offline-btn';
-        let btnContent = '\u2193'; // Down arrow
+        let btnContent = '\u2B73'; // Download icon ⭳
         if (isDownloading) {
             btnClass += ' downloading';
             btnContent = ''; // Spinner via CSS
         } else if (isOffline) {
             btnClass += ' saved';
-            btnContent = '\u2713'; // Checkmark
+            btnContent = '\u2B73'; // Same icon, color changes via CSS
         }
 
         spine.innerHTML = `
