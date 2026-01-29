@@ -712,7 +712,7 @@ async function queueDownload() {
     // Show download overlay
     downloadOverlay.classList.remove('hidden');
     downloadOverlayIcon.className = 'download-icon downloading';
-    downloadOverlayIcon.textContent = '⬇';
+    downloadOverlayIcon.textContent = '';
 
     try {
         const response = await fetch('/api/downloads', {
