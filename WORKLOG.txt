@@ -118,7 +118,8 @@ DONE: Change scheduler implementation so user can schedule via GUI.
 DONE: disable downloads page in offline mode (eg when using service worker)
     - Added /api/ping endpoint for future connectivity checks
     - Downloads page shows error modal when API returns 503 (offline)
-TODO: implement PWA support on android - see pwa-requirements.md
+TODO: implement PWA support on android - see pwa-android-requirements.md
+TODO: implement PWA support on iphone - see pwa-iphone-requirements.md
 TODO: build CLI for "station refresh" which will refresh station data
     - Station table needs timezone of station
     - need archive table with historical archive dates _and_ times all in station timezone offset.
