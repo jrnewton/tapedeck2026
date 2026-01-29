@@ -590,7 +590,7 @@ function formatTime(seconds) {
 // =====================================================
 
 // Show/hide pages
-function showPage(page) {
+async function showPage(page) {
     state.currentPage = page;
 
     if (page === 'downloads') {
@@ -598,6 +598,8 @@ function showPage(page) {
         miniPlayer.classList.add('hidden');
         downloadsView.classList.remove('hidden');
         document.title = 'Tapedeck downloads';
+        // Reset show dropdown to default
+        dlShowSelect.value = '';
         // Update URL
         const params = getURLParams();
         params.set('page', 'downloads');
@@ -613,6 +615,14 @@ function showPage(page) {
         const params = getURLParams();
         params.delete('page');
         updateURL(params);
+        // Refresh shows dropdown with updated cache, preserving selection
+        if (stationSelect.value) {
+            const showId = params.get('show');
+            await loadShows(stationSelect.value);
+            if (showId) {
+                showSelect.value = showId;
+            }
+        }
     }
 }
 
@@ -689,6 +699,7 @@ async function queueDownload() {
 
     // Check if this is a new show (not in main page shows list)
     const isNewShow = !state.shows.some(s => s.Name === show);
+    debugLog('queueDownload: show=', show, 'isNewShow=', isNewShow, 'state.shows=', state.shows.map(s => s.Name));
 
     const date = 'latest';
 
@@ -717,7 +728,9 @@ async function queueDownload() {
             debugLog('Download queued successfully, ID:', download.ID);
             // Start polling for completion
             // Pass station if this is a new show (to refresh cache on success)
-            pollDownloadStatus(download.ID, isNewShow ? station : null);
+            const stationToRefresh = isNewShow ? station : null;
+            debugLog('pollDownloadStatus: stationToRefresh=', stationToRefresh);
+            pollDownloadStatus(download.ID, stationToRefresh);
         }
     } catch (error) {
         debugError('Failed to queue download:', error);
@@ -760,6 +773,7 @@ async function pollDownloadStatus(downloadId, stationToRefresh) {
 // Show download result and re-enable buttons
 // stationToRefresh: if set, invalidate and pre-fetch shows cache for this station
 function showDownloadResult(success, stationToRefresh) {
+    debugLog('showDownloadResult: success=', success, 'stationToRefresh=', stationToRefresh);
     downloadBtn.classList.remove('queued');
     if (success) {
         downloadBtn.classList.add('success');
@@ -768,6 +782,7 @@ function showDownloadResult(success, stationToRefresh) {
         // If this was a new show, invalidate cache and pre-fetch
         if (stationToRefresh) {
             const cacheKey = `api-cache:/api/stations/${stationToRefresh}/shows`;
+            debugLog('Invalidating cache and pre-fetching:', cacheKey);
             localStorage.removeItem(cacheKey);
             // Pre-fetch in background so data is ready when user returns to main page
             fetchAndCache(`/api/stations/${stationToRefresh}/shows`, cacheKey);
