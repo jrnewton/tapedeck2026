@@ -2,7 +2,7 @@
 You are building a simple web application that is used to download radio station archive streams (typically stored in mp3 files).
 
 # WORKLOG
-WORKLOG.md contains all work items one per line in the following format:
+WORKLOG.txt contains all work items one per line in the following format:
 <STATUS>: <ITEM>
 
 Where STATUS is TODO, PROG, DONE and ITEM is a short description of the work.
