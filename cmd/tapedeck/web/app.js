@@ -687,6 +687,9 @@ async function queueDownload() {
         return;
     }
 
+    // Check if this is a new show (not in main page shows list)
+    const isNewShow = !state.shows.some(s => s.Name === show);
+
     const date = 'latest';
 
     // Disable both buttons while download is in progress
@@ -704,32 +707,34 @@ async function queueDownload() {
 
         if (response.status === 409) {
             showErrorModal('This episode is already downloaded or queued');
-            showDownloadResult(false);
+            showDownloadResult(false, null);
         } else if (!response.ok) {
             const error = await response.text();
             showErrorModal('Failed to queue download: ' + error);
-            showDownloadResult(false);
+            showDownloadResult(false, null);
         } else {
             const download = await response.json();
             debugLog('Download queued successfully, ID:', download.ID);
             // Start polling for completion
-            pollDownloadStatus(download.ID);
+            // Pass station if this is a new show (to refresh cache on success)
+            pollDownloadStatus(download.ID, isNewShow ? station : null);
         }
     } catch (error) {
         debugError('Failed to queue download:', error);
         showErrorModal('Failed to queue download: ' + error.message);
-        showDownloadResult(false);
+        showDownloadResult(false, null);
     }
 }
 
 // Poll for download completion status
-async function pollDownloadStatus(downloadId) {
+// stationToRefresh: if set, refresh shows cache for this station on success
+async function pollDownloadStatus(downloadId, stationToRefresh) {
     const poll = async () => {
         try {
             const response = await fetch(`/api/downloads/${downloadId}`);
             if (!response.ok) {
                 debugError('Failed to poll download status:', response.status);
-                showDownloadResult(false);
+                showDownloadResult(false, null);
                 return;
             }
 
@@ -737,27 +742,36 @@ async function pollDownloadStatus(downloadId) {
             debugLog('Download status:', download.Status);
 
             if (download.Status === 'completed') {
-                showDownloadResult(true);
+                showDownloadResult(true, stationToRefresh);
             } else if (download.Status === 'failed') {
-                showDownloadResult(false);
+                showDownloadResult(false, null);
             } else {
                 // Still pending or downloading, poll again
                 setTimeout(poll, 2000);
             }
         } catch (error) {
             debugError('Error polling download status:', error);
-            showDownloadResult(false);
+            showDownloadResult(false, null);
         }
     };
     poll();
 }
 
 // Show download result and re-enable buttons
-function showDownloadResult(success) {
+// stationToRefresh: if set, invalidate and pre-fetch shows cache for this station
+function showDownloadResult(success, stationToRefresh) {
     downloadBtn.classList.remove('queued');
     if (success) {
         downloadBtn.classList.add('success');
         downloadBtn.textContent = '\u2713'; // ✓
+
+        // If this was a new show, invalidate cache and pre-fetch
+        if (stationToRefresh) {
+            const cacheKey = `api-cache:/api/stations/${stationToRefresh}/shows`;
+            localStorage.removeItem(cacheKey);
+            // Pre-fetch in background so data is ready when user returns to main page
+            fetchAndCache(`/api/stations/${stationToRefresh}/shows`, cacheKey);
+        }
     } else {
         downloadBtn.classList.add('error');
         downloadBtn.textContent = '\u2717'; // ✗
