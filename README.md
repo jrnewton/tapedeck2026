@@ -12,6 +12,12 @@ make test-e2e # Run E2E tests (requires Docker with Chromium)
 make clean    # Remove build artifacts
 ```
 
+## Android Emulator
+Run this to enable http://localhost:8080 access in emulator
+```
+%USERPROFILE%\AppData\Local\Android\Sdk\platform-tools\adb.exe reverse tcp:8080 tcp:8080
+```
+
 ## Production Deployment (DigitalOcean)
 
 ### Server Details
