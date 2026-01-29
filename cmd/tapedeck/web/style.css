@@ -28,6 +28,7 @@ body {
     flex-direction: column;
     height: 100vh;
     height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Compact Header with Station Selector */
@@ -296,7 +297,6 @@ main {
     background: linear-gradient(180deg, var(--dark-grey) 0%, var(--black) 100%);
     border-top: 3px solid var(--black);
     padding: 0.75rem 1rem;
-    margin-bottom: env(safe-area-inset-bottom, 0px);
     flex-shrink: 0;
 }
 
