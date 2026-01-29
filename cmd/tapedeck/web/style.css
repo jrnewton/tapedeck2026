@@ -380,7 +380,7 @@ main {
 
 #progress-bar::-webkit-slider-runnable-track {
     height: 6px;
-    background: #333;
+    background: #666;
     border-radius: 3px;
 }
 
@@ -389,7 +389,7 @@ main {
     appearance: none;
     width: 20px;
     height: 20px;
-    background: #888;
+    background: #aaa;
     border-radius: 50%;
     cursor: pointer;
     margin-top: -7px;
@@ -397,14 +397,14 @@ main {
 
 #progress-bar::-moz-range-track {
     height: 6px;
-    background: #333;
+    background: #666;
     border-radius: 3px;
 }
 
 #progress-bar::-moz-range-thumb {
     width: 20px;
     height: 20px;
-    background: #888;
+    background: #aaa;
     border-radius: 50%;
     cursor: pointer;
     border: none;
