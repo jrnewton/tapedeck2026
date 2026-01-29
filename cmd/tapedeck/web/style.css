@@ -850,3 +850,35 @@ main {
     background: var(--red);
     color: var(--white);
 }
+
+/* Download progress overlay */
+.download-overlay-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.download-icon {
+    font-size: 4rem;
+    color: white;
+}
+
+.download-icon.downloading {
+    animation: bounce 0.6s ease-in-out infinite;
+}
+
+.download-icon.success {
+    animation: none;
+    color: #4a4;
+}
+
+.download-icon.error {
+    animation: none;
+    color: var(--red);
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}

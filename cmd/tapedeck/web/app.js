@@ -159,6 +159,8 @@ const dlShowSelect = document.getElementById('dl-show-select');
 const downloadBtn = document.getElementById('download-btn');
 const scheduleBtn = document.getElementById('schedule-btn');
 const schedulesList = document.getElementById('schedules-list');
+const downloadOverlay = document.getElementById('download-overlay');
+const downloadOverlayIcon = document.getElementById('download-overlay-icon');
 
 // Initialize
 async function init() {
@@ -706,8 +708,11 @@ async function queueDownload() {
     // Disable both buttons while download is in progress
     downloadBtn.disabled = true;
     scheduleBtn.disabled = true;
-    downloadBtn.classList.add('queued');
-    downloadBtn.textContent = 'QUEUED';
+
+    // Show download overlay
+    downloadOverlay.classList.remove('hidden');
+    downloadOverlayIcon.className = 'download-icon downloading';
+    downloadOverlayIcon.textContent = '⬇';
 
     try {
         const response = await fetch('/api/downloads', {
@@ -774,10 +779,10 @@ async function pollDownloadStatus(downloadId, stationToRefresh) {
 // stationToRefresh: if set, invalidate and pre-fetch shows cache for this station
 function showDownloadResult(success, stationToRefresh) {
     debugLog('showDownloadResult: success=', success, 'stationToRefresh=', stationToRefresh);
-    downloadBtn.classList.remove('queued');
+
     if (success) {
-        downloadBtn.classList.add('success');
-        downloadBtn.textContent = '\u2713'; // ✓
+        downloadOverlayIcon.className = 'download-icon success';
+        downloadOverlayIcon.textContent = '✔';
 
         // If this was a new show, invalidate cache and pre-fetch
         if (stationToRefresh) {
@@ -788,16 +793,16 @@ function showDownloadResult(success, stationToRefresh) {
             fetchAndCache(`/api/stations/${stationToRefresh}/shows`, cacheKey);
         }
     } else {
-        downloadBtn.classList.add('error');
-        downloadBtn.textContent = '\u2717'; // ✗
+        downloadOverlayIcon.className = 'download-icon error';
+        downloadOverlayIcon.textContent = '✖';
     }
 
+    // Auto-dismiss overlay after delay
     setTimeout(() => {
+        downloadOverlay.classList.add('hidden');
         downloadBtn.disabled = false;
         scheduleBtn.disabled = false;
-        downloadBtn.classList.remove('success', 'error');
-        downloadBtn.textContent = 'LATEST';
-    }, 1500);
+    }, 1000);
 }
 
 // Load schedules
