@@ -983,7 +983,6 @@ function setupEventListeners() {
         state.debugMode = !state.debugMode;
         localStorage.setItem('debugMode', state.debugMode);
         debugToggle.classList.toggle('active', state.debugMode);
-        alert('Debug mode: ' + (state.debugMode ? 'ON' : 'OFF'));
     });
 
     // About modal

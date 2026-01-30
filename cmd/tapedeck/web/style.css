@@ -194,6 +194,16 @@ header h1 a {
     background: var(--dark-grey);
 }
 
+.modal-divider {
+    border: none;
+    border-top: 1px solid var(--dark-grey);
+    margin: 1rem 0;
+}
+
+.modal-content .debug-toggle {
+    margin-top: 0.5rem;
+}
+
 /* Main Content - Tape Collection */
 main {
     flex: 1;
