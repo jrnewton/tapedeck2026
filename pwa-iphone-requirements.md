@@ -83,12 +83,12 @@ This is **critical** for iOS to recognize the app as installable:
 
 ### Icon Size Guidelines
 
-| Size | Device |
-|------|--------|
-| 120×120 | iPhone (older) |
-| 152×152 | iPad |
-| 167×167 | iPad Pro |
-| 180×180 | iPhone (Retina) - **recommended default** |
+| Size    | Device                                        |
+|---------|-----------------------------------------------|
+| 120×120 | iPhone (older)                                |
+| 152×152 | iPad                                          |
+| 167×167 | iPad Pro                                      |
+| 180×180 | iPhone (Retina) - **recommended default**     |
 
 ### Icon Design Tips
 
@@ -192,12 +192,12 @@ if ('mediaSession' in navigator) {
 
 ⚠️ **Critical limitations on iOS Safari:**
 
-| Issue | Workaround |
-|-------|------------|
-| **Artwork max size ~128×128** | Images larger than 128×128 may show as a grey box. Resize images dynamically (see below). |
-| **Only first artwork used** | iOS picks one size (usually the first) and uses it everywhere, including blurred in Control Center. |
-| **Album hidden if artist set** | If you provide `artist`, the `album` field won't display. Choose one or the other. |
-| **seekbackward/seekforward hides prev/next** | If you set handlers for seek actions, the Previous/Next track buttons disappear. |
+| Issue                                         | Workaround                                                                                                       |
+|-----------------------------------------------|------------------------------------------------------------------------------------------------------------------|
+| **Artwork max size ~128×128**                 | Images larger than 128×128 may show as a grey box. Resize images dynamically (see below).                       |
+| **Only first artwork used**                   | iOS picks one size (usually the first) and uses it everywhere, including blurred in Control Center.              |
+| **Album hidden if artist set**                | If you provide `artist`, the `album` field won't display. Choose one or the other.                              |
+| **seekbackward/seekforward hides prev/next**  | If you set handlers for seek actions, the Previous/Next track buttons disappear.                                |
 
 ### Workaround: Resize Large Artwork for iOS
 
@@ -285,14 +285,14 @@ CarPlay Now Playing Screen (reads system info)
 
 ### Limitations
 
-| Feature | PWA Support |
-|---------|-------------|
-| Now Playing artwork in CarPlay | ✅ Yes (via Media Session API) |
-| Now Playing title/artist | ✅ Yes |
-| Play/Pause controls | ✅ Yes |
-| Custom CarPlay UI/templates | ❌ No (requires native app) |
-| CarPlay app icon on dashboard | ❌ No (requires native app) |
-| Browse content in CarPlay | ❌ No (requires native app) |
+| Feature                            | PWA Support                        |
+|------------------------------------|------------------------------------|
+| Now Playing artwork in CarPlay     | ✅ Yes (via Media Session API)     |
+| Now Playing title/artist           | ✅ Yes                             |
+| Play/Pause controls                | ✅ Yes                             |
+| Custom CarPlay UI/templates        | ❌ No (requires native app)        |
+| CarPlay app icon on dashboard      | ❌ No (requires native app)        |
+| Browse content in CarPlay          | ❌ No (requires native app)        |
 
 ### For Full CarPlay Integration
 
@@ -308,16 +308,16 @@ Consider using a PWA-to-native wrapper (like Capacitor or PWABuilder) as a start
 
 ## iOS PWA Limitations Summary
 
-| Feature | iOS Support |
-|---------|-------------|
-| Add to Home Screen | ✅ Manual only (no auto-prompt) |
-| Push Notifications | ✅ iOS 16.4+ (must be installed first) |
-| Offline Support | ✅ Via Service Workers |
-| Background Audio | ⚠️ Limited |
-| Storage Persistence | ⚠️ May be cleared after 7 days of inactivity |
-| Badging | ❌ Not supported |
-| App Shortcuts | ❌ Not supported |
-| Full CarPlay Integration | ❌ Requires native app |
+| Feature                  | iOS Support                                   |
+|--------------------------|-----------------------------------------------|
+| Add to Home Screen       | ✅ Manual only (no auto-prompt)               |
+| Push Notifications       | ✅ iOS 16.4+ (must be installed first)        |
+| Offline Support          | ✅ Via Service Workers                        |
+| Background Audio         | ⚠️ Limited                                    |
+| Storage Persistence      | ⚠️ May be cleared after 7 days of inactivity  |
+| Badging                  | ❌ Not supported                              |
+| App Shortcuts            | ❌ Not supported                              |
+| Full CarPlay Integration | ❌ Requires native app                        |
 
 ---
 
