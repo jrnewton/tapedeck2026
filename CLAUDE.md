@@ -1,6 +1,9 @@
 # Summary
 You are building a simple web application that is used to download radio station archive streams (typically stored in mp3 files).
 
+# Claude work loop
+Work on prompt from user, verify with user, update WORKLOG, commit.
+
 # WORKLOG
 WORKLOG.txt contains all work items one per line in the following format:
 <STATUS>: <ITEM>
@@ -14,7 +17,7 @@ Target architecture is a docker container running under a Linux host system.
 The UI is mobile first, prioritizing Safari on IOS and PWA.
 
 # Git
-You are working in a Git repository.  Pls commit after each iteration is done and tested.  Prefix your commit message with the robot emojii Eg "🤖 fixed foobar" 
+Pls commit after each iteration is done and tested.  Prefix your commit message with the robot emojii Eg "🤖 fixed foobar" 
 
 # Go Code
 - Project structure must be as simple as possible.
@@ -24,7 +27,8 @@ You are working in a Git repository.  Pls commit after each iteration is done an
 Use `make` for common tasks.
 
 # Frontend Debugging
-All console output (log, warn, error) and alerts in app.js must be controlled by the debug mode toggle (DBG button). Use these helper functions instead of console.* directly:
+All console output (log, warn, error) and alerts in app.js must be controlled by the debug mode toggle (DBG button). 
+Use these helper functions instead of console.* directly:
 - `debugLog(...args)` - for info-level logging
 - `debugWarn(...args)` - for warning-level logging
 - `debugError(...args)` - for error-level logging
