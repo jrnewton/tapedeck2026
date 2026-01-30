@@ -8,7 +8,6 @@ make run      # Run server via Docker Compose (port 8080)
 make stop     # Stop server
 make logs     # View server logs
 make test     # Run unit tests
-make test-e2e # Run E2E tests (requires Docker with Chromium)
 make clean    # Remove build artifacts
 ```
 

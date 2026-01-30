@@ -1,8 +1,0 @@
-services:
-  e2e-test:
-    build:
-      context: .
-      dockerfile: Dockerfile.test
-    container_name: tapedeck-e2e-test
-    environment:
-      - E2E_TEST=1

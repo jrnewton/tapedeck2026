@@ -1,4 +1,4 @@
-.PHONY: help build run stop test test-e2e clean logs deploy prod-stop prod-sync
+.PHONY: help build run stop test clean logs deploy prod-stop prod-sync
 
 help:
 	@echo "Usage: make [target]"
@@ -9,7 +9,6 @@ help:
 	@echo "  stop      Stop server"
 	@echo "  logs      View server logs"
 	@echo "  test      Run unit tests"
-	@echo "  test-e2e  Run E2E tests (requires Docker)"
 	@echo "  clean     Remove build artifacts"
 	@echo "  deploy    Deploy to DigitalOcean droplet"
 	@echo "  prod-stop Stop production server on DigitalOcean"
@@ -36,10 +35,6 @@ logs:
 # Run unit tests
 test:
 	go test ./...
-
-# Run E2E tests (requires Docker)
-test-e2e:
-	docker build -f Dockerfile.test -t tapedeck-test . && docker run --rm tapedeck-test
 
 # Clean build artifacts
 clean:
