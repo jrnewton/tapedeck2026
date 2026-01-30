@@ -10,10 +10,9 @@ const APP_SHELL = [
     '/index.html',
     '/app.js',
     '/style.css',
-    '/offline.js'
+    '/offline.js',
+    '/favicon.png'
 ];
-//    '/favicon.png'
-
 
 // Install event - cache app shell
 self.addEventListener('install', (event) => {
