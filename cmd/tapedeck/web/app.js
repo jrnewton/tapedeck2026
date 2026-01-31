@@ -164,13 +164,6 @@ const downloadOverlayIcon = document.getElementById('download-overlay-icon');
 
 // Initialize
 async function init() {
-    // Register service worker for offline app shell
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch((error) => {
-            debugWarn('Service worker registration failed:', error);
-        });
-    }
-
     // Load offline IDs from IndexedDB
     await loadOfflineIds();
 
