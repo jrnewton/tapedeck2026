@@ -144,8 +144,7 @@ header h1 a {
     background-color: var(--white);
     border: 3px solid var(--black);
     border-radius: 8px;
-    padding: 1.25rem;
-    padding-top: 2.5rem;
+    padding: 1rem;
     width: calc(100% - 2rem);
     max-width: 340px;
     position: relative;
@@ -172,32 +171,26 @@ header h1 a {
     margin-bottom: 0;
 }
 
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
 .modal-close {
-    position: absolute;
-    top: 0.5rem;
-    right: 0.5rem;
     background: var(--light-grey);
     border: 2px solid var(--black);
     border-radius: 4px;
-    font-size: 0.8rem;
+    font-size: 0.6rem;
+    font-family: 'Audiowide', sans-serif;
     color: var(--white);
     cursor: pointer;
-    padding: 0.2rem 0.5rem;
-    line-height: 1;
+    padding: 0.3rem 0.5rem;
 }
 
 .modal-close:hover {
     background: var(--dark-grey);
-}
-
-.modal-divider {
-    border: none;
-    border-top: 1px solid var(--dark-grey);
-    margin: 1rem 0;
-}
-
-.modal-content .debug-toggle {
-    margin-top: 0.5rem;
 }
 
 /* Icon references in About modal (non-interactive) */
