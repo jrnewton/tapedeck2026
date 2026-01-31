@@ -137,7 +137,6 @@ DONE: Performance optimization - Cache-Control headers
     - Favicon sizes already optimized (1.3KB favicon, 30KB PWA icon)
     - Minification deferred (KISS - current sizes acceptable)
 TODO: setup playwright and playwright mcp
-    - remove old e2e tests and headless chrome if successfull
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days
