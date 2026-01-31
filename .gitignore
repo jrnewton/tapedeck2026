@@ -9,3 +9,6 @@ data/
 
 # Windows Zone.Identifier files (WSL)
 *:Zone.Identifier
+
+# Source assets
+cassette-tape.png
