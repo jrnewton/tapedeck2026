@@ -1,7 +1,7 @@
 // Tapedeck Service Worker
 // Provides offline app shell caching for PWA experience
 
-const CACHE_VERSION = 'v39';
+const CACHE_VERSION = 'v40';
 const CACHE_NAME = `tapedeck-${CACHE_VERSION}`;
 
 // App shell files to cache for offline use
@@ -70,14 +70,15 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request, { ignoreSearch: true })
             .then((cachedResponse) => {
-                if (cachedResponse) {
+                // Don't serve redirected responses (causes Safari "has redirections" error)
+                if (cachedResponse && !cachedResponse.redirected && cachedResponse.type !== 'opaqueredirect') {
                     return cachedResponse;
                 }
 
-                // For navigation requests, also try index.html
+                // For navigation requests, serve index.html for SPA routing
                 if (event.request.mode === 'navigate') {
                     return caches.match('/index.html').then((indexResponse) => {
-                        if (indexResponse) {
+                        if (indexResponse && !indexResponse.redirected) {
                             return indexResponse;
                         }
                         return fetchAndCache(event.request);
@@ -100,8 +101,9 @@ self.addEventListener('fetch', (event) => {
 function fetchAndCache(request) {
     return fetch(request)
         .then((response) => {
-            // Don't cache non-GET or failed responses
-            if (request.method !== 'GET' || !response.ok) {
+            // Don't cache non-GET, failed, or redirected responses
+            // (redirected responses cause Safari "has redirections" error)
+            if (request.method !== 'GET' || !response.ok || response.redirected) {
                 return response;
             }
             const responseToCache = response.clone();
