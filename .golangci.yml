@@ -1,0 +1,32 @@
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - errcheck      # Check for unchecked errors
+    - govet         # Go vet checks
+    - staticcheck   # Static analysis
+    - unused        # Find unused code
+    - ineffassign   # Detect ineffectual assignments
+    - gosimple      # Simplify code suggestions
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (io.Closer).Close
+      - (*os.File).Close
+      - (*net/http.ResponseWriter).Write
+      - (net/http.ResponseWriter).Write
+      - (*zombiezen.com/go/sqlite/sqlitex.Pool).Close
+      - os.Remove
+      # DB close in defer is common pattern
+      - (*local/tapedeck/internal/db.DB).Close
+      # UpdateDownloadStatus used in fire-and-forget error paths
+      - (*local/tapedeck/internal/db.DB).UpdateDownloadStatus
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 50
+  max-same-issues: 10
+  exclude-files:
+    - ".*_test\\.go$"

@@ -145,7 +145,7 @@ const aboutModal = document.getElementById('about-modal');
 const modalClose = document.getElementById('modal-close');
 const errorModal = document.getElementById('error-modal');
 const errorModalClose = document.getElementById('error-modal-close');
-const errorModalMessage = document.getElementById('error-modal-message');
+// errorModalMessage is accessed inside showErrorModal function
 
 // Downloads page DOM elements
 const mainView = document.getElementById('main-view');
@@ -220,7 +220,7 @@ async function refreshCache(url, cacheKey) {
                 }
             }
         }
-    } catch (e) {
+    } catch (_e) {
         // Silently fail - we already returned cached data
     }
 }
@@ -257,7 +257,7 @@ async function fetchAndCache(url, cacheKey) {
     const data = await response.json();
     try {
         localStorage.setItem(cacheKey, JSON.stringify(data));
-    } catch (e) {
+    } catch (_e) {
         // localStorage might be full
     }
     return data;
@@ -1063,7 +1063,7 @@ function setupEventListeners() {
         timeTotal.textContent = formatTime(audioPlayer.duration);
     });
 
-    audioPlayer.addEventListener('error', (e) => {
+    audioPlayer.addEventListener('error', (_e) => {
         const error = audioPlayer.error;
         debugError('Audio error:', error?.code, error?.message);
         debugAlert('Audio error: ' + (error?.message || 'Unknown error'));
