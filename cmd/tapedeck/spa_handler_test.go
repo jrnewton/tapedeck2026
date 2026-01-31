@@ -87,3 +87,40 @@ func TestSPAHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestCacheHeaders(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"index.html": &fstest.MapFile{Data: []byte("<html>index</html>")},
+		"app.js":     &fstest.MapFile{Data: []byte("console.log('app')")},
+		"style.css":  &fstest.MapFile{Data: []byte("body { margin: 0; }")},
+	}
+
+	handler := spaHandler(mockFS)
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	tests := []struct {
+		path        string
+		wantCache   string
+	}{
+		{"/app.js", "public, max-age=31536000, immutable"},
+		{"/style.css", "public, max-age=31536000, immutable"},
+		{"/", "no-cache, no-store, must-revalidate"},
+		{"/nonexistent", "no-cache, no-store, must-revalidate"}, // fallback to index.html
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			resp, err := http.Get(server.URL + tt.path)
+			if err != nil {
+				t.Fatalf("failed to make request: %v", err)
+			}
+			defer resp.Body.Close()
+
+			got := resp.Header.Get("Cache-Control")
+			if got != tt.wantCache {
+				t.Errorf("Cache-Control for %s: got %q, want %q", tt.path, got, tt.wantCache)
+			}
+		})
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"local/tapedeck/internal/api"
 	"local/tapedeck/internal/db"
@@ -30,14 +31,38 @@ func spaHandler(webFS fs.FS) http.Handler {
 
 		// Check if file exists (strip leading slash for fs.Stat)
 		if _, err := fs.Stat(webFS, path[1:]); err == nil {
+			setCacheHeaders(w, path)
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
 		// Fallback to index.html for SPA routing
+		setCacheHeaders(w, "/index.html")
 		r.URL.Path = "/"
 		fileServer.ServeHTTP(w, r)
 	})
+}
+
+// setCacheHeaders sets appropriate Cache-Control headers based on file type.
+func setCacheHeaders(w http.ResponseWriter, path string) {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".js", ".css":
+		// Static assets: cache for 1 year (SW version handles updates)
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	case ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".webp", ".woff", ".woff2":
+		// Images and fonts: cache for 1 year
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	case ".html":
+		// HTML: no cache to ensure fresh content
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	case ".json":
+		// Manifest: short cache
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	default:
+		// Default: short cache
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
 }
 
 func main() {
