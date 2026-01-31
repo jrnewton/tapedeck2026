@@ -136,6 +136,7 @@ DONE: Performance optimization - Cache-Control headers
     - Added unit tests for cache header behavior
     - Favicon sizes already optimized (1.3KB favicon, 30KB PWA icon)
     - Minification deferred (KISS - current sizes acceptable)
+TODO: setup lint, security and other scanners on github repo
 TODO: setup playwright and playwright mcp
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
