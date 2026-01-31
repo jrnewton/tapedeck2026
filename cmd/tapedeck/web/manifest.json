@@ -1,6 +1,7 @@
 {
   "name": "Tapedeck",
   "short_name": "Tapedeck",
+  "description": "A personal radio archive player for listening to saved broadcasts from your favorite stations.",
   "start_url": "/",
   "display": "fullscreen",
   "background_color": "#1a1a2e",
@@ -15,6 +16,14 @@
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "1179x2556",
+      "type": "image/png",
+      "form_factor": "narrow"
     }
   ]
 }

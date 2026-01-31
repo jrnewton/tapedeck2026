@@ -6,3 +6,6 @@ data/
 /tapedeck-cli
 /tapedeck-linux
 /bin/
+
+# Windows Zone.Identifier files (WSL)
+*:Zone.Identifier
