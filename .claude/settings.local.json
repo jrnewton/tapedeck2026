@@ -3,7 +3,12 @@
     "allow": [
       "Bash(docker --version:*)",
       "Bash(docker-compose:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "WebFetch(domain:coderwall.com)",
+      "WebFetch(domain:dev.webonomic.nl)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:adactio.com)",
+      "WebFetch(domain:web.dev)"
     ]
   }
 }
