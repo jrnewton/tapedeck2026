@@ -120,14 +120,16 @@ DONE: disable downloads page in offline mode (eg when using service worker)
     - Downloads page shows error modal when API returns 503 (offline)
 PROG: implement PWA support on iphone - see pwa-iphone-requirements.md
     - check app against https://www.pwabuilder.com/reportcard?site=https://tapedeck.us
+PROG: performance optimization
+    - improve favicon size
+    - TTL on files
+    - minified css/js
 TODO: setup playwright and playwright mcp
     - remove old e2e tests and headless chrome if successfull
 TODO: build CLI for "station refresh" which will refresh station data
-    - Station table needs timezone of station
-    - need archive table with historical archive dates _and_ times all in station timezone offset.
-    - must handle shows that occur on multiple days.
-    - merge "rebroadcast" into same show
-TOOD: performance optimization, improve favicon size, TTL on files, minified css/js.
+    - need archive table with historical archive dates _and_ times
+    - must handle shows that occur on multiple days
+    - merge "rebroadcast" show and regular show into same show
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Review all test cases and test coverage.
 TODO: Implement backend CLI for WHRB
