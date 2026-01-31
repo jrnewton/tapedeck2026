@@ -221,16 +221,13 @@ header h1 a {
 }
 
 .icon-ref.record-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     width: 20px;
     height: 20px;
-    background: linear-gradient(180deg, var(--red) 0%, #b00 100%);
-    border: 2px solid var(--black);
-    border-radius: 4px;
-    font-size: 0.7rem;
-    color: var(--white);
+}
+
+.icon-ref.record-icon svg {
+    width: 16px;
+    height: 16px;
 }
 
 /* Main Content - Tape Collection */
@@ -481,17 +478,8 @@ main {
     background: linear-gradient(180deg, #444 0%, #333 100%);
 }
 
-.mini-controls button .icon {
-    display: block;
-}
-
-/* Play button slightly larger */
-.mini-controls #btn-play {
-    width: 60px;
-}
-
-/* Seek buttons (back 10s, forward 30s) */
-.seek-btn svg {
+/* SVGs in mini-controls buttons */
+.mini-controls button svg {
     display: block;
 }
 
@@ -762,18 +750,9 @@ main {
     cursor: not-allowed;
 }
 
-/* Record button in mini-controls */
-#btn-record {
-    background: linear-gradient(180deg, var(--red) 0%, #b00 100%);
-    border-color: var(--red);
-}
-
-#btn-record:hover {
-    background: linear-gradient(180deg, #ff3333 0%, var(--red) 100%);
-}
-
-#btn-record .record-icon {
-    font-size: 1.1rem;
+/* Record button in mini-controls - uses red SVG icon */
+#btn-record svg {
+    display: block;
 }
 
 /* Status list */

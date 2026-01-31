@@ -54,7 +54,7 @@
                     stations.</p>
                 <p>Select a station and show to browse available recordings, then tap a tape to start playing. Use the
                     offline button <span class="icon-ref offline-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M12 15l-4-4M12 15l4-4"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg></span> to save the recording to your device.</p>
-                <p>Use the record button <span class="icon-ref record-icon">&#9679;</span> to archive shows for later listening.</p>
+                <p>Use the record button <span class="icon-ref record-icon"><svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="7" fill="#e53935"/><circle cx="12" cy="12" r="9" fill="none" stroke="#e53935" stroke-width="1.5" opacity="0.4"/></svg></span> to archive shows for later listening.</p>
             </div>
         </div>
 
@@ -143,7 +143,13 @@
                 </svg>
             </button>
             <button id="btn-play" title="Play/Pause">
-                <span class="icon play-icon">&#9654;&#xFE0E;</span>
+                <svg class="play-icon" viewBox="0 0 24 24" width="32" height="32">
+                    <path d="M6 4l15 8-15 8z" fill="currentColor"/>
+                </svg>
+                <svg class="pause-icon hidden" viewBox="0 0 24 24" width="32" height="32">
+                    <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+                    <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor"/>
+                </svg>
             </button>
             <button id="btn-fwd" class="seek-btn" title="Forward 30 seconds">
                 <svg viewBox="0 0 24 24" width="40" height="40">
@@ -152,10 +158,16 @@
                 </svg>
             </button>
             <button id="btn-record" title="Downloads">
-                <span class="icon record-icon">&#9679;</span>
+                <svg viewBox="0 0 24 24" width="32" height="32">
+                    <circle cx="12" cy="12" r="7" fill="#e53935"/>
+                    <circle cx="12" cy="12" r="9" fill="none" stroke="#e53935" stroke-width="1.5" opacity="0.4"/>
+                </svg>
             </button>
             <button id="btn-help" title="About Tapedeck">
-                <span class="icon">?</span>
+                <svg viewBox="0 0 24 24" width="32" height="32">
+                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                    <text x="12" y="17" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">?</text>
+                </svg>
             </button>
         </div>
     </div>

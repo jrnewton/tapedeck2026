@@ -509,8 +509,15 @@ function updateNowPlaying() {
 }
 
 function updatePlayButton() {
-    const icon = btnPlay.querySelector('.icon');
-    icon.innerHTML = state.isPlaying ? '&#9616;&#9616;' : '&#9654;&#xFE0E;';
+    const playIcon = btnPlay.querySelector('.play-icon');
+    const pauseIcon = btnPlay.querySelector('.pause-icon');
+    if (state.isPlaying) {
+        playIcon.classList.add('hidden');
+        pauseIcon.classList.remove('hidden');
+    } else {
+        playIcon.classList.remove('hidden');
+        pauseIcon.classList.add('hidden');
+    }
 }
 
 async function togglePlay() {
