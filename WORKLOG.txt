@@ -118,11 +118,24 @@ DONE: Change scheduler implementation so user can schedule via GUI.
 DONE: disable downloads page in offline mode (eg when using service worker)
     - Added /api/ping endpoint for future connectivity checks
     - Downloads page shows error modal when API returns 503 (offline)
-PROG: implement PWA support on iphone - see pwa-iphone-requirements.md
+DONE: implement PWA support on iphone - see pwa-iphone-requirements.md
     - check app against https://www.pwabuilder.com/reportcard?site=https://tapedeck.us
-PROG: performance optimization
+DONE: Audio player UI improvements
+    - Replaced text-based control buttons with SVG icons (play, pause, record, help)
+    - Seek buttons already used SVG (back 10s, forward 30s)
+    - Record button uses red circle with faded ring
+    - Help button uses question mark in circle outline
+    - Unified button dimensions (52x44px) across all mini-controls
+    - Play/pause toggle uses separate SVG elements with hidden class
+DONE: Performance optimization - Cache-Control headers
+    - Server now sets Cache-Control headers for static assets
+    - JS/CSS: 1 year cache with immutable (SW version handles cache busting)
+    - Images/fonts: 1 year cache with immutable
+    - HTML: no-cache to ensure fresh content
+    - JSON (manifest): 1 hour cache
+    - Added unit tests for cache header behavior
+PROG: performance optimization (remaining)
     - improve favicon size
-    - TTL on files
     - minified css/js
 TODO: setup playwright and playwright mcp
     - remove old e2e tests and headless chrome if successfull
