@@ -1,7 +1,7 @@
 // Tapedeck Service Worker
 // Provides offline app shell caching for PWA experience
 
-const CACHE_VERSION = 'v38';
+const CACHE_VERSION = 'v39';
 const CACHE_NAME = `tapedeck-${CACHE_VERSION}`;
 
 // App shell files to cache for offline use

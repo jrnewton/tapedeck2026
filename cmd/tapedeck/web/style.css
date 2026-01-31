@@ -70,10 +70,13 @@ header h1 a {
     border: 2px solid var(--black);
     border-radius: 4px;
     cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.header-btn:hover {
-    background-color: var(--orange);
+@media (hover: hover) {
+    .header-btn:hover {
+        background-color: var(--orange);
+    }
 }
 
 .debug-toggle {
@@ -188,10 +191,13 @@ header h1 a {
     cursor: pointer;
     padding: 0 0.4rem;
     line-height: 1.2;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.modal-close:hover {
-    background: var(--dark-grey);
+@media (hover: hover) {
+    .modal-close:hover {
+        background: var(--dark-grey);
+    }
 }
 
 /* Icon references in About modal (non-interactive) */
@@ -597,10 +603,13 @@ main {
     cursor: pointer;
     text-decoration: none;
     margin-left: auto;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.back-btn:hover {
-    background: var(--orange);
+@media (hover: hover) {
+    .back-btn:hover {
+        background: var(--orange);
+    }
 }
 
 /* Download sections */

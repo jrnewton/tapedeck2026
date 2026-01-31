@@ -606,6 +606,7 @@ async function showPage(page) {
         downloadsView.classList.add('hidden');
         mainView.classList.remove('hidden');
         miniPlayer.classList.remove('hidden');
+        document.activeElement.blur(); // Clear focus to prevent stuck hover on touch
         updatePageTitle(); // Restore main page title
         // Remove page param from URL
         const params = getURLParams();
