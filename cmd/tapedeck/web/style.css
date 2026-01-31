@@ -179,14 +179,10 @@ header h1 a {
     background: var(--light-grey);
     border: 2px solid var(--black);
     border-radius: 4px;
-    font-size: 1.25rem;
+    font-size: 0.8rem;
     color: var(--white);
     cursor: pointer;
-    min-width: 44px;
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    padding: 0.2rem 0.5rem;
     line-height: 1;
 }
 
@@ -202,6 +198,39 @@ header h1 a {
 
 .modal-content .debug-toggle {
     margin-top: 0.5rem;
+}
+
+/* Icon references in About modal (non-interactive) */
+.icon-ref {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    pointer-events: none;
+}
+
+.icon-ref.offline-icon {
+    width: 20px;
+    height: 20px;
+}
+
+.icon-ref.offline-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: #888;
+}
+
+.icon-ref.record-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: linear-gradient(180deg, var(--red) 0%, #b00 100%);
+    border: 2px solid var(--black);
+    border-radius: 4px;
+    font-size: 0.7rem;
+    color: var(--white);
 }
 
 /* Main Content - Tape Collection */
