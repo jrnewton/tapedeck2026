@@ -17,7 +17,7 @@ Target architecture is a docker container running under a Linux host system.
 The UI is mobile first, prioritizing Safari on IOS and PWA.
 
 # Git
-Pls commit after each iteration is done and tested.  Prefix your commit message with the robot emojii Eg "🤖 fixed foobar" 
+Pls commit after each iteration is done and confirmed by the user.  Prefix your commit message with the robot emojii Eg "🤖 fixed foobar" 
 
 # Go Code
 - Project structure must be as simple as possible.
