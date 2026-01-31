@@ -5,5 +5,6 @@ RUN apk add --no-cache tzdata
 ENV TZ=America/New_York
 WORKDIR /app
 COPY bin/tapedeck bin/tapedeck-cli ./
+COPY cmd/tapedeck/web/ ./web/
 EXPOSE 8080
 CMD ["./tapedeck"]

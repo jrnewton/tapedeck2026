@@ -7,6 +7,7 @@ services:
       - "8080:8080"
     volumes:
       - ./data:/data
+      - ./cmd/tapedeck/web:/app/web:ro
     environment:
       - TAPEDECK_PORT=8080
       - TAPEDECK_DATA_DIR=/data

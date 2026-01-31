@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"io/fs"
 	"log"
 	"net/http"
@@ -17,10 +16,7 @@ import (
 	_ "local/tapedeck/internal/adapters/wmbr"
 )
 
-//go:embed web/*
-var webFiles embed.FS
-
-// spaHandler returns an HTTP handler that serves static files from the embedded
+// spaHandler returns an HTTP handler that serves static files from a
 // filesystem, falling back to index.html for paths that don't match a file.
 // This enables client-side routing for the single-page application.
 func spaHandler(webFS fs.FS) http.Handler {
@@ -92,11 +88,8 @@ func main() {
 	mux := http.NewServeMux()
 	apiServer.RegisterRoutes(mux)
 
-	// Serve static files from embedded filesystem with SPA fallback
-	webFS, err := fs.Sub(webFiles, "web")
-	if err != nil {
-		log.Fatalf("failed to create web filesystem: %v", err)
-	}
+	// Serve static files from filesystem with SPA fallback
+	webFS := os.DirFS("./web")
 	mux.Handle("/", spaHandler(webFS))
 
 	log.Printf("Starting server on :%s", port)

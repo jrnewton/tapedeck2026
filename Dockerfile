@@ -14,5 +14,6 @@ ENV TZ=America/New_York
 WORKDIR /app
 COPY --from=builder /app/tapedeck .
 COPY --from=builder /app/tapedeck-cli .
+COPY cmd/tapedeck/web/ ./web/
 EXPOSE 8080
 CMD ["./tapedeck"]
