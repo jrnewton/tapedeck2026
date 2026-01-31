@@ -1,8 +1,9 @@
 {
   "name": "Tapedeck",
+  "id": "https://tapedeck.us/",
+  "start_url": "/",
   "short_name": "Tapedeck",
   "description": "A personal radio archive player for listening to saved broadcasts from your favorite stations.",
-  "start_url": "/",
   "display": "fullscreen",
   "orientation": "portrait",
   "background_color": "#1a1a2e",
