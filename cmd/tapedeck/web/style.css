@@ -490,6 +490,11 @@ main {
     width: 60px;
 }
 
+/* Seek buttons (back 10s, forward 30s) */
+.seek-btn svg {
+    display: block;
+}
+
 /* Offline Download Button */
 .offline-btn {
     width: 44px;

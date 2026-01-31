@@ -133,15 +133,14 @@ const tapeList = document.getElementById('tape-list');
 const audioPlayer = document.getElementById('audio-player');
 const nowPlaying = document.getElementById('now-playing');
 const btnPlay = document.getElementById('btn-play');
-const btnStop = document.getElementById('btn-stop');
-const btnPrev = document.getElementById('btn-prev');
-const btnNext = document.getElementById('btn-next');
+const btnBack = document.getElementById('btn-back');
+const btnFwd = document.getElementById('btn-fwd');
+const btnHelp = document.getElementById('btn-help');
 const progressBar = document.getElementById('progress-bar');
 const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
 const leftReel = document.querySelector('.left-reel');
 const rightReel = document.querySelector('.right-reel');
-const aboutBtn = document.getElementById('about-btn');
 const aboutModal = document.getElementById('about-modal');
 const modalClose = document.getElementById('modal-close');
 const errorModal = document.getElementById('error-modal');
@@ -540,28 +539,12 @@ async function togglePlay() {
     updatePlayButton();
 }
 
-function stop() {
-    audioPlayer.pause();
-    audioPlayer.currentTime = 0;
-    state.isPlaying = false;
-    updatePlayButton();
-    stopReels();
-}
-
 function playNext() {
     if (!state.currentDownload || state.downloads.length === 0) return;
 
     const currentIndex = state.downloads.findIndex(d => d.ID === state.currentDownload.ID);
     const nextIndex = (currentIndex + 1) % state.downloads.length;
     playDownload(state.downloads[nextIndex]);
-}
-
-function playPrev() {
-    if (!state.currentDownload || state.downloads.length === 0) return;
-
-    const currentIndex = state.downloads.findIndex(d => d.ID === state.currentDownload.ID);
-    const prevIndex = (currentIndex - 1 + state.downloads.length) % state.downloads.length;
-    playDownload(state.downloads[prevIndex]);
 }
 
 function startReels() {
@@ -980,10 +963,6 @@ function setupEventListeners() {
     });
 
     // About modal
-    aboutBtn.addEventListener('click', () => {
-        aboutModal.classList.remove('hidden');
-    });
-
     modalClose.addEventListener('click', () => {
         aboutModal.classList.add('hidden');
     });
@@ -1057,9 +1036,15 @@ function setupEventListeners() {
     });
 
     btnPlay.addEventListener('click', togglePlay);
-    btnStop.addEventListener('click', stop);
-    btnNext.addEventListener('click', playNext);
-    btnPrev.addEventListener('click', playPrev);
+    btnBack.addEventListener('click', () => {
+        audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 10);
+    });
+    btnFwd.addEventListener('click', () => {
+        audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 30);
+    });
+    btnHelp.addEventListener('click', () => {
+        aboutModal.classList.remove('hidden');
+    });
 
     audioPlayer.addEventListener('timeupdate', () => {
         const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
