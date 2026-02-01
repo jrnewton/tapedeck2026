@@ -1,4 +1,4 @@
-.PHONY: help build run stop test clean logs deploy prod-stop prod-sync lint-js lint-all gosec security
+.PHONY: help build run stop test clean logs deploy prod-stop prod-sync lint-go lint-js lint-all gosec security
 
 help:
 	@echo "Usage: make [target]"
@@ -9,6 +9,7 @@ help:
 	@echo "  stop      Stop server"
 	@echo "  logs      View server logs"
 	@echo "  test      Run unit tests"
+	@echo "  lint-go   Run go vet on all Go code"
 	@echo "  lint-js   Run JavaScript linter (ESLint)"
 	@echo "  lint-sec  Run Go security scanner"
 	@echo "  lint-all  Run all linters"
@@ -39,12 +40,16 @@ logs:
 test:
 	go test ./...
 
+# Run go vet
+lint-go:
+	go vet -v ./...
+
 # Run JavaScript linter
 lint-js:
 	npx eslint cmd/tapedeck/web/*.js
 
 # Run all linters
-lint-all: lint-js lint-sec
+lint-all: lint-go lint-js lint-sec
 
 # Run Go security scanner
 lint-sec:
