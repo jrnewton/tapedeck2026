@@ -551,7 +551,7 @@ function playNext() {
 
     const currentIndex = state.downloads.findIndex(d => d.ID === state.currentDownload.ID);
     const nextIndex = (currentIndex + 1) % state.downloads.length;
-    playDownload(state.downloads[nextIndex]);
+    playDownload(state.downloads.at(nextIndex));
 }
 
 function startReels() {
