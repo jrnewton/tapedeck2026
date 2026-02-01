@@ -136,7 +136,12 @@ DONE: Performance optimization - Cache-Control headers
     - Added unit tests for cache header behavior
     - Favicon sizes already optimized (1.3KB favicon, 30KB PWA icon)
     - Minification deferred (KISS - current sizes acceptable)
-TODO: setup lint, security and other scanners on github repo
+PROG: setup lint, security and other scanners on github repo
+TODO: protect certain API calls with authentication
+    - POST /api/downloads
+    - POST /api/schedules
+    - DELETE /api/schedules
+    - PATCH /api/schedules
 TODO: setup playwright and playwright mcp
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
@@ -148,3 +153,4 @@ TODO: Implement backend CLI for WHRB
 TODO: Implement backend CLI for WUMB
 TODO: Implement backend CLI for WOMR
 TODO: Implement backend CLI for WCUW
+TODO: SEO improvements
