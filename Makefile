@@ -66,7 +66,7 @@ SSH_KEY := ~/.ssh/digitalocean_ed25519
 DROPLET := root@68.183.125.135
 REMOTE_PATH := /opt/tapedeck
 
-deploy:
+deploy: clean build
 	@echo "Syncing to DigitalOcean..."
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
 		bin/prod/ $(DROPLET):$(REMOTE_PATH)/bin/
