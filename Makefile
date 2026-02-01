@@ -51,7 +51,7 @@ lint-go:
 
 # Run JavaScript linter
 lint-js:
-	npx eslint cmd/tapedeck/web/*.js
+	npx eslint --max-warnings 0 cmd/tapedeck/web/*.js
 
 # Run all linters
 lint: lint-go lint-js
