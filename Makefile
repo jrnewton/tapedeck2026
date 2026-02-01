@@ -1,4 +1,4 @@
-.PHONY: help build run stop logs test lint-go lint-js lint-sec lint clean deploy prod-stop
+.PHONY: help build run stop logs test lint-go lint-js lint clean deploy prod-stop
 
 help:
 	@echo "Usage: make [target]"
@@ -9,9 +9,8 @@ help:
 	@echo "  stop      Stop server"
 	@echo "  logs      View server logs"
 	@echo "  test      Run unit tests"
-	@echo "  lint-go   Run go vet on all Go code"
+	@echo "  lint-go   Run go vet and govulncheck"
 	@echo "  lint-js   Run JavaScript linter (ESLint)"
-	@echo "  lint-sec  Run Go security scanner"
 	@echo "  lint      Run all linters"
 	@echo "  clean     Remove build artifacts"
 	@echo "  deploy    Deploy to DigitalOcean droplet"
@@ -44,20 +43,17 @@ logs:
 test:
 	go test ./...
 
-# Run go vet
+# Run go vet and vulnerability check
 lint-go:
 	go vet -v ./...
+	go tool govulncheck ./...
 
 # Run JavaScript linter
 lint-js:
 	npx eslint cmd/tapedeck/web/*.js
 
-# Run Go security scanner
-lint-sec:
-	gosec -quiet ./...
-
 # Run all linters
-lint: lint-go lint-js lint-sec
+lint: lint-go lint-js
 
 # Clean build artifacts
 clean:
