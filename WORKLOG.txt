@@ -136,7 +136,14 @@ DONE: Performance optimization - Cache-Control headers
     - Added unit tests for cache header behavior
     - Favicon sizes already optimized (1.3KB favicon, 30KB PWA icon)
     - Minification deferred (KISS - current sizes acceptable)
-PROG: setup lint, security and other scanners on github repo
+DONE: setup lint, security and other scanners
+    - Removed golangci-lint in favor of built-in tools
+    - lint-go target: go mod tidy, go vet, govulncheck
+    - lint-js target: ESLint with --max-warnings 0 (warnings fail build)
+    - govulncheck added via Go 1.24 tool directive in go.mod
+    - Upgraded Go to 1.25.6 to fix standard library vulnerabilities
+    - Fixed ESLint warnings: strict equality, .at() for array access
+    - Updated Dockerfile to golang:1.25-alpine
 TODO: protect certain API calls with authentication
     - POST /api/downloads
     - POST /api/schedules
