@@ -15,5 +15,3 @@ cassette-tape.png
 
 # Node (for local eslint runs)
 node_modules/
-package.json
-package-lock.json

@@ -144,6 +144,7 @@ DONE: setup lint, security and other scanners
     - Upgraded Go to 1.25.6 to fix standard library vulnerabilities
     - Fixed ESLint warnings: strict equality, .at() for array access
     - Updated Dockerfile to golang:1.25-alpine
+    - Added type: module to package.json (eliminates Node ES module warning)
 TODO: protect certain API calls with authentication
     - POST /api/downloads
     - POST /api/schedules
