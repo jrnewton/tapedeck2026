@@ -45,7 +45,8 @@ test:
 
 # Run go vet and vulnerability check
 lint-go:
-	go vet -v ./...
+	go mod tidy
+	go vet ./...
 	go tool govulncheck ./...
 
 # Run JavaScript linter
