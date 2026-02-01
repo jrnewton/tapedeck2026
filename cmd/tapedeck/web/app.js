@@ -118,7 +118,7 @@ async function applyURLState() {
             await loadDownloads(showId);
 
             if (playId) {
-                const download = state.downloads.find(d => d.ID == playId);
+                const download = state.downloads.find(d => d.ID === Number(playId));
                 if (download) await loadDownloadWithoutPlay(download); // Load but don't autoplay
             }
         }
