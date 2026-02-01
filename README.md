@@ -37,7 +37,8 @@ ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135
 ```bash
 # From local machine - sync code changes
 rsync -avz -e "ssh -i ~/.ssh/digitalocean_ed25519" \
-  Dockerfile docker-compose.yml go.mod go.sum cmd internal pkg web \
+  Dockerfile docker-compose.yml .env.example Caddyfile.oauth \
+  go.mod go.sum cmd internal pkg web \
   root@68.183.125.135:/opt/tapedeck/
 
 # On server - rebuild and restart
@@ -91,6 +92,49 @@ ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
 ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
   "caddy list-certificates"
 ```
+
+### OAuth2 Authentication (Admin API Protection)
+
+Admin API endpoints (POST/DELETE/PATCH to /api/*) are protected via OAuth2 Proxy with Google authentication.
+
+#### Initial Setup
+
+1. **Create Google OAuth credentials**:
+   - Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+   - Create OAuth 2.0 Client ID (Web application)
+   - Add authorized redirect URI: `https://tapedeck.us/oauth2/callback`
+
+2. **Create .env file on server**:
+   ```bash
+   ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135
+   cd /opt/tapedeck
+   cp .env.example .env
+   nano .env  # Fill in your Google OAuth credentials
+   ```
+
+3. **Generate cookie secret**:
+   ```bash
+   openssl rand -base64 32
+   ```
+
+4. **Update Caddyfile** (use Caddyfile.oauth as reference):
+   ```bash
+   ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+     "cat /opt/tapedeck/Caddyfile.oauth > /etc/caddy/Caddyfile && systemctl restart caddy"
+   ```
+
+5. **Start oauth2-proxy**:
+   ```bash
+   ssh -i ~/.ssh/digitalocean_ed25519 root@68.183.125.135 \
+     "cd /opt/tapedeck && docker compose up -d"
+   ```
+
+#### How It Works
+
+- **Public access**: GET requests to /api/* work without authentication
+- **Protected actions**: POST/DELETE/PATCH to /api/* require Google login
+- **Allowed users**: Only emails listed in OAUTH2_PROXY_AUTHENTICATED_EMAILS can access
+- **Session**: Cookie-based, persists across browser restarts
 
 ### Firewall (UFW)
 ```bash

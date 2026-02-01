@@ -1,0 +1,27 @@
+# Caddyfile for tapedeck.us with OAuth2 Proxy protection
+# Copy to /etc/caddy/Caddyfile on the server
+
+tapedeck.us {
+    # OAuth2 proxy endpoints (login, callback, sign-out)
+    handle /oauth2/* {
+        reverse_proxy localhost:4180
+    }
+
+    # Protected API endpoints - require authentication for non-GET methods
+    @protected_api {
+        path /api/*
+        not method GET HEAD OPTIONS
+    }
+    handle @protected_api {
+        forward_auth localhost:4180 {
+            uri /oauth2/auth
+            copy_headers X-Auth-Request-User X-Auth-Request-Email
+        }
+        reverse_proxy localhost:8080
+    }
+
+    # Everything else (static files, GET /api/*) goes directly to tapedeck
+    handle {
+        reverse_proxy localhost:8080
+    }
+}

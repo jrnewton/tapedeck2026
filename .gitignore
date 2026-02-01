@@ -1,6 +1,9 @@
 # Runtime data
 data/
 
+# Environment secrets
+.env
+
 # Binaries
 /tapedeck
 /tapedeck-cli

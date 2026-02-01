@@ -4,6 +4,7 @@ services:
     container_name: tapedeck
     restart: unless-stopped
     ports:
+      # Production: use "127.0.0.1:8080:8080" to only allow local access via Caddy
       - "8080:8080"
     volumes:
       - ./data:/data
@@ -11,3 +12,25 @@ services:
     environment:
       - TAPEDECK_PORT=8080
       - TAPEDECK_DATA_DIR=/data
+      - TZ=America/New_York
+
+  # OAuth2 Proxy for protecting admin API endpoints
+  # Requires .env file - see .env.example for required variables
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: oauth2-proxy
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --upstream=static://202
+      - --provider=google
+      - --email-domain=*
+      - --cookie-secure=true
+      - --cookie-domain=tapedeck.us
+      - --reverse-proxy=true
+      - --skip-provider-button=true
+    env_file:
+      - .env
+    ports:
+      # Production: use "127.0.0.1:4180:4180" to only allow local access via Caddy
+      - "127.0.0.1:4180:4180"
