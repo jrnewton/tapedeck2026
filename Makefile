@@ -1,4 +1,4 @@
-.PHONY: help build run stop test clean logs deploy prod-stop prod-sync lint-go lint-js lint-all gosec security
+.PHONY: help build run stop logs test lint-go lint-js lint-sec lint clean deploy prod-stop
 
 help:
 	@echo "Usage: make [target]"
@@ -12,17 +12,21 @@ help:
 	@echo "  lint-go   Run go vet on all Go code"
 	@echo "  lint-js   Run JavaScript linter (ESLint)"
 	@echo "  lint-sec  Run Go security scanner"
-	@echo "  lint-all  Run all linters"
+	@echo "  lint      Run all linters"
 	@echo "  clean     Remove build artifacts"
 	@echo "  deploy    Deploy to DigitalOcean droplet"
 	@echo "  prod-stop Stop production server on DigitalOcean"
-	@echo "  prod-sync Sync local ./data/ to production (DESTRUCTIVE)"
 
-# Build the server binary (local dev)
-build:
+# Build the server binary (local dev and production)
+build: lint test
 	@mkdir -p bin
 	go build -o bin/tapedeck ./cmd/tapedeck
 	go build -o bin/tapedeck-cli ./cmd/tapedeck-cli
+
+	@echo "Cross-compiling for Linux (static binary)..."
+	@mkdir -p bin/prod
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/prod/tapedeck ./cmd/tapedeck
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/prod/tapedeck-cli ./cmd/tapedeck-cli
 
 # Run the server via Docker Compose
 run:
@@ -48,28 +52,24 @@ lint-go:
 lint-js:
 	npx eslint cmd/tapedeck/web/*.js
 
-# Run all linters
-lint-all: lint-go lint-js lint-sec
-
 # Run Go security scanner
 lint-sec:
 	gosec -quiet ./...
+
+# Run all linters
+lint: lint-go lint-js lint-sec
 
 # Clean build artifacts
 clean:
 	rm -rf bin/
 	go clean -cache
 
-# Deploy to DigitalOcean droplet
+# DigitalOcean access
 SSH_KEY := ~/.ssh/digitalocean_ed25519
 DROPLET := root@68.183.125.135
 REMOTE_PATH := /opt/tapedeck
 
 deploy:
-	@echo "Cross-compiling for Linux (static binary)..."
-	@mkdir -p bin/prod
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/prod/tapedeck ./cmd/tapedeck
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/prod/tapedeck-cli ./cmd/tapedeck-cli
 	@echo "Syncing to DigitalOcean..."
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
 		bin/prod/ $(DROPLET):$(REMOTE_PATH)/bin/
@@ -88,10 +88,10 @@ prod-stop:
 	@echo "Production server stopped."
 
 # Sync local data to production (one-way, destructive)
-prod-sync:
-	@echo "WARNING: This will overwrite production data with local data!"
-	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
-	@sleep 5
-	rsync -avz --delete --checksum -e "ssh -i $(SSH_KEY)" \
-		./data/ $(DROPLET):$(REMOTE_PATH)/data/
-	@echo "Data sync complete."
+#prod-sync:
+#	@echo "WARNING: This will overwrite production data with local data!"
+#	@echo "Press Ctrl+C to cancel, or wait 5 seconds to continue..."
+#	@sleep 5
+#	rsync -avz --delete --checksum -e "ssh -i $(SSH_KEY)" \
+#		./data/ $(DROPLET):$(REMOTE_PATH)/data/
+#	@echo "Data sync complete."
