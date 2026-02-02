@@ -145,17 +145,17 @@ DONE: setup lint, security and other scanners
     - Fixed ESLint warnings: strict equality, .at() for array access
     - Updated Dockerfile to golang:1.25-alpine
     - Added type: module to package.json (eliminates Node ES module warning)
-PROG: protect certain API calls with authentication
+DONE: protect certain API calls with authentication
     - POST /api/downloads
     - POST /api/schedules
     - DELETE /api/schedules
     - PATCH /api/schedules
     - Using oauth2-proxy with Google OAuth and Caddy forward_auth
-    - Infrastructure-only change (no Go/JS code changes)
     - Added: docker-compose.yml oauth2-proxy service
     - Added: .env.example template for OAuth secrets
-    - Added: Caddyfile.oauth example config
-    - Pending: deploy to production and test
+    - Added: Caddyfile.oauth example config for Caddy
+    - Frontend: handle401() redirects to /oauth2/sign_in on 401
+    - Fixed deleteSchedule() to use showErrorModal instead of debugAlert
 TODO: setup playwright and playwright mcp
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times

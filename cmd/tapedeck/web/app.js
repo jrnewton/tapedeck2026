@@ -51,6 +51,14 @@ function showErrorModal(message) {
     }
 }
 
+// Handle 401 Unauthorized - redirect to OAuth login
+function handle401() {
+    showErrorModal('Please sign in to perform this action. Redirecting to login...');
+    setTimeout(() => {
+        window.location.href = '/oauth2/sign_in?rd=' + encodeURIComponent(window.location.pathname + window.location.search);
+    }, 1500);
+}
+
 // Update page title based on current state
 function updatePageTitle() {
     const base = 'Tapedeck';
@@ -706,7 +714,11 @@ async function queueDownload() {
             body: JSON.stringify({ station, show, date })
         });
 
-        if (response.status === 409) {
+        if (response.status === 401) {
+            handle401();
+            showDownloadResult(false, null);
+            return;
+        } else if (response.status === 409) {
             showErrorModal('This episode is already downloaded or queued');
             showDownloadResult(false, null);
         } else if (!response.ok) {
@@ -899,7 +911,10 @@ async function createSchedule() {
             body: JSON.stringify({ station, show })
         });
 
-        if (response.status === 409) {
+        if (response.status === 401) {
+            handle401();
+            return;
+        } else if (response.status === 409) {
             showErrorModal('A schedule already exists for this show');
         } else if (!response.ok) {
             const error = await response.text();
@@ -940,9 +955,12 @@ async function deleteSchedule(id) {
             method: 'DELETE'
         });
 
-        if (!response.ok) {
+        if (response.status === 401) {
+            handle401();
+            return;
+        } else if (!response.ok) {
             const error = await response.text();
-            debugAlert('Failed to delete schedule: ' + error);
+            showErrorModal('Failed to delete schedule: ' + error);
         } else {
             debugLog('Schedule deleted');
         }
@@ -951,7 +969,7 @@ async function deleteSchedule(id) {
         await loadSchedules();
     } catch (error) {
         debugError('Failed to delete schedule:', error);
-        debugAlert('Failed to delete schedule: ' + error.message);
+        showErrorModal('Failed to delete schedule: ' + error.message);
     }
 }
 
