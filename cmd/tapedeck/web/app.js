@@ -226,6 +226,18 @@ async function init() {
     await loadStations();
     setupEventListeners();
     await applyURLState();
+
+    // Display app version from SW cache name (pick highest version)
+    try {
+        const names = await caches.keys();
+        const versions = names
+            .filter(n => n.startsWith('tapedeck-v'))
+            .map(n => Number(n.replace('tapedeck-v', '')))
+            .filter(n => !isNaN(n));
+        if (versions.length > 0) {
+            document.getElementById('app-version').textContent = 'v' + Math.max(...versions);
+        }
+    } catch (_e) { /* caches API unavailable */ }
 }
 
 // Load offline download IDs from IndexedDB

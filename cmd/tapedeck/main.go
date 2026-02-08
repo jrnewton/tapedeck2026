@@ -45,6 +45,12 @@ func spaHandler(webFS fs.FS) http.Handler {
 
 // setCacheHeaders sets appropriate Cache-Control headers based on file type.
 func setCacheHeaders(w http.ResponseWriter, path string) {
+	// Service worker must never be aggressively cached — browser needs to
+	// fetch a fresh copy to detect version changes and trigger updates.
+	if strings.HasSuffix(path, "sw.js") {
+		w.Header().Set("Cache-Control", "no-cache")
+		return
+	}
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".js", ".css":
