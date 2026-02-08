@@ -156,6 +156,34 @@ DONE: protect certain API calls with authentication
     - Added: Caddyfile.oauth example config for Caddy
     - Frontend: handle401() redirects to /oauth2/sign_in on 401
     - Fixed deleteSchedule() to use showErrorModal instead of debugAlert
+DONE: Fix stale cache and URL state edge cases
+    - Clear currentDownload and mini player when show disappears from background refresh
+    - Validate show selection before loading downloads from URL
+    - Clear stale play param when download removed by background refresh
+    - Guard against null state.downloads in togglePlay
+DONE: Three-state status message for dropdown context
+    - "Select a station" / "Select a show to view downloads" / "No completed downloads"
+    - Consolidated all empty-state rendering through renderDownloads()
+    - Station/show change handlers use renderDownloads() instead of inline DOM
+DONE: Reel animation improvements
+    - Replaced invisible radial gradient reels with 3-spoke design
+    - Animation freezes in place on pause (animation-play-state instead of class toggle)
+    - Reels pause during seek button press and progress bar scrubbing
+DONE: Fix SW never updating past v59
+    - Root cause: setCacheHeaders() applied 1-year immutable cache to sw.js
+    - Added Cache-Control: no-cache exception for sw.js in main.go
+    - Added updateViaCache: 'none' to SW registration
+    - Display app version (from SW cache name) in about modal
+DONE: Containerize full stack (Caddy + oauth2-proxy + tapedeck)
+    - All three services managed by docker-compose in both environments
+    - Standalone caddy service masked and removed from production server
+    - authenticated-emails.txt for OAuth email whitelist
+DONE: Fix deploy to include authenticated-emails.txt
+    - Added authenticated-emails.txt to Makefile rsync deploy target
+DONE: Filter scheduled downloads by selected station
+    - Schedules list filtered by dlStationSelect value
+    - "Select a station to view scheduled downloads" when no station selected
+    - Re-renders on station dropdown change
 TODO: setup playwright and playwright mcp
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
