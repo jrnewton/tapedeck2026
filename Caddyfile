@@ -1,5 +1,5 @@
 # Caddyfile for tapedeck.us with OAuth2 Proxy protection
-# Copy to /etc/caddy/Caddyfile on the server
+# Deployed to /etc/caddy/Caddyfile via `make deploy`
 
 tapedeck.us {
     # OAuth2 proxy endpoints (login, callback, sign-out)

@@ -75,8 +75,9 @@ deploy: clean build
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
 		Dockerfile.deploy docker-compose.deploy.yml \
 		$(DROPLET):$(REMOTE_PATH)/
+	scp -i $(SSH_KEY) Caddyfile $(DROPLET):/etc/caddy/Caddyfile
 	@echo "Rebuilding and restarting on server..."
-	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose -f docker-compose.deploy.yml build && docker compose -f docker-compose.deploy.yml up -d"
+	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose -f docker-compose.deploy.yml build && docker compose -f docker-compose.deploy.yml up -d && systemctl reload caddy"
 	@echo "Deploy complete! https://tapedeck.us"
 
 # Stop production server on DigitalOcean
