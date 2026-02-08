@@ -1140,6 +1140,16 @@ function setupEventListeners() {
     btnFwd.addEventListener('click', () => {
         audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 30);
     });
+
+    // Pause reels while seek buttons are held down
+    for (const btn of [btnBack, btnFwd]) {
+        for (const evt of ['mousedown', 'touchstart']) {
+            btn.addEventListener(evt, () => stopReels());
+        }
+        for (const evt of ['mouseup', 'mouseleave', 'touchend']) {
+            btn.addEventListener(evt, () => { if (state.isPlaying) startReels(); });
+        }
+    }
     btnHelp.addEventListener('click', () => {
         aboutModal.classList.remove('hidden');
     });
@@ -1180,11 +1190,18 @@ function setupEventListeners() {
         stopReels();
     });
 
+    // Pause reels while scrubbing the progress bar
+    for (const evt of ['mousedown', 'touchstart']) {
+        progressBar.addEventListener(evt, () => stopReels());
+    }
     progressBar.addEventListener('input', (e) => {
         if (audioPlayer.duration) {
             audioPlayer.currentTime = (e.target.value / 100) * audioPlayer.duration;
         }
     });
+    for (const evt of ['mouseup', 'touchend', 'change']) {
+        progressBar.addEventListener(evt, () => { if (state.isPlaying) startReels(); });
+    }
 
     // Handle browser back/forward navigation
     window.addEventListener('popstate', async () => {
