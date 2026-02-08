@@ -73,7 +73,7 @@ deploy: clean build
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
 		cmd/tapedeck/web/ $(DROPLET):$(REMOTE_PATH)/cmd/tapedeck/web/
 	rsync -avz --checksum -e "ssh -i $(SSH_KEY)" \
-		Dockerfile.deploy docker-compose.deploy.yml Caddyfile .env \
+		Dockerfile.deploy docker-compose.deploy.yml Caddyfile .env authenticated-emails.txt \
 		$(DROPLET):$(REMOTE_PATH)/
 	@echo "Rebuilding and restarting on server..."
 	ssh -i $(SSH_KEY) $(DROPLET) "cd $(REMOTE_PATH) && docker compose -f docker-compose.deploy.yml up -d --build"
