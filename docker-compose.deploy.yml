@@ -32,11 +32,13 @@ services:
       - --http-address=0.0.0.0:4180
       - --upstream=static://202
       - --provider=google
-      - --email-domain=*
+      - --authenticated-emails-file=/etc/oauth2-proxy/authenticated-emails.txt
       - --cookie-secure=true
       - --cookie-domain=tapedeck.us
       - --reverse-proxy=true
       - --skip-provider-button=true
+    volumes:
+      - ./authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro
     env_file:
       - .env
 
