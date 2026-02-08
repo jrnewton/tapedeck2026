@@ -346,22 +346,39 @@ main {
 .mini-reel {
     width: 36px;
     height: 36px;
-    background: radial-gradient(circle, #333 30%, #1a1a1a 70%);
+    background: #1a1a1a;
     border-radius: 50%;
     border: 2px solid #555;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: relative;
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .mini-reel-center {
-    width: 12px;
-    height: 12px;
-    background-color: #666;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    background: #888;
     border-radius: 50%;
-    border: 1px solid #888;
+    z-index: 2;
 }
+
+.mini-reel-spoke {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 50%;
+    background: #666;
+    transform-origin: center top;
+}
+
+.mini-reel-spoke:nth-child(1) { transform: translate(-50%, 0) rotate(0deg); }
+.mini-reel-spoke:nth-child(2) { transform: translate(-50%, 0) rotate(120deg); }
+.mini-reel-spoke:nth-child(3) { transform: translate(-50%, 0) rotate(240deg); }
 
 .mini-reel.spinning {
     animation: spin 2s linear infinite;
