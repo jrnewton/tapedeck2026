@@ -380,8 +380,13 @@ main {
 .mini-reel-spoke:nth-child(2) { transform: translate(-50%, 0) rotate(120deg); }
 .mini-reel-spoke:nth-child(3) { transform: translate(-50%, 0) rotate(240deg); }
 
-.mini-reel.spinning {
+.mini-reel {
     animation: spin 2s linear infinite;
+    animation-play-state: paused;
+}
+
+.mini-reel.spinning {
+    animation-play-state: running;
 }
 
 @keyframes spin {
