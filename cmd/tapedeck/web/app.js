@@ -164,11 +164,19 @@ async function applyURLState() {
 
         if (showId) {
             showSelect.value = showId;
-            await loadDownloads(showId);
+            if (showSelect.value === showId) {
+                await loadDownloads(showId);
 
-            if (playId) {
-                const download = state.downloads.find(d => d.ID === Number(playId));
-                if (download) await loadDownloadWithoutPlay(download); // Load but don't autoplay
+                if (playId) {
+                    const download = state.downloads.find(d => d.ID === Number(playId));
+                    if (download) await loadDownloadWithoutPlay(download); // Load but don't autoplay
+                }
+            } else {
+                // Show no longer exists in dropdown - clean URL
+                const params = getURLParams();
+                params.delete('show');
+                params.delete('play');
+                updateURL(params);
             }
         }
     }
