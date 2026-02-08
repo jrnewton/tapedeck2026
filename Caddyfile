@@ -1,10 +1,11 @@
-# Caddyfile for tapedeck.us with OAuth2 Proxy protection
-# Deployed to /etc/caddy/Caddyfile via `make deploy`
+# Shared Caddyfile for local dev and production
+# Local dev: http://localhost:8080 (used by docker-compose.yml)
+# Production: tapedeck.us with auto HTTPS (used by docker-compose.deploy.yml)
 
-tapedeck.us {
+(app) {
     # OAuth2 proxy endpoints (login, callback, sign-out)
     handle /oauth2/* {
-        reverse_proxy localhost:4180
+        reverse_proxy oauth2-proxy:4180
     }
 
     # Protected API endpoints - require authentication for non-GET methods
@@ -13,15 +14,23 @@ tapedeck.us {
         not method GET HEAD OPTIONS
     }
     handle @protected_api {
-        forward_auth localhost:4180 {
+        forward_auth oauth2-proxy:4180 {
             uri /oauth2/auth
             copy_headers X-Auth-Request-User X-Auth-Request-Email
         }
-        reverse_proxy localhost:8080
+        reverse_proxy tapedeck:8080
     }
 
     # Everything else (static files, GET /api/*) goes directly to tapedeck
     handle {
-        reverse_proxy localhost:8080
+        reverse_proxy tapedeck:8080
     }
+}
+
+http://localhost:8080 {
+    import app
+}
+
+tapedeck.us {
+    import app
 }

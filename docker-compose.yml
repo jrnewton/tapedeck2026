@@ -3,8 +3,6 @@ services:
     build: .
     container_name: tapedeck
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     volumes:
       - ./data:/data
       - ./cmd/tapedeck/web:/app/web:ro
@@ -12,3 +10,29 @@ services:
       - TAPEDECK_PORT=8080
       - TAPEDECK_DATA_DIR=/data
       - TZ=America/New_York
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    container_name: oauth2-proxy
+    restart: unless-stopped
+    command:
+      - --http-address=0.0.0.0:4180
+      - --upstream=static://202
+      - --provider=google
+      - --email-domain=*
+      - --cookie-secure=false
+      - --cookie-domain=localhost
+      - --reverse-proxy=true
+      - --skip-provider-button=true
+      - --redirect-url=http://localhost:8080/oauth2/callback
+    env_file:
+      - .env
