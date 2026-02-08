@@ -403,7 +403,14 @@ function renderShows() {
 
 function renderDownloads() {
     if (!state.downloads || state.downloads.length === 0) {
-        const msg = showSelect.value ? 'No completed downloads for this show' : 'Select a show to view downloads';
+        let msg;
+        if (showSelect.value) {
+            msg = 'No completed downloads for this show';
+        } else if (stationSelect.value) {
+            msg = 'Select a show to view downloads';
+        } else {
+            msg = 'Select a station';
+        }
         tapeList.innerHTML = `<p class="empty-message">${msg}</p>`;
         return;
     }
