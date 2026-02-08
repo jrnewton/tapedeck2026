@@ -174,12 +174,6 @@ header h1 a {
     margin-bottom: 0;
 }
 
-.app-version {
-    font-size: 0.75rem;
-    color: var(--light-grey);
-    text-align: right;
-}
-
 .modal-header {
     display: flex;
     justify-content: space-between;
