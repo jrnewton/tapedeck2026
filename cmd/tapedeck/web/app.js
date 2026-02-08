@@ -51,12 +51,52 @@ function showErrorModal(message) {
     }
 }
 
-// Handle 401 Unauthorized - redirect to OAuth login
-function handle401() {
-    showErrorModal('Please sign in to perform this action. Redirecting to login...');
-    setTimeout(() => {
-        window.location.href = '/oauth2/sign_in?rd=' + encodeURIComponent(window.location.pathname + window.location.search);
-    }, 1500);
+// Handle 401 Unauthorized - redirect to OAuth login with pending action context
+function handle401(pendingAction) {
+    const params = new URLSearchParams();
+    params.set('page', 'downloads');
+    if (pendingAction) {
+        params.set('action', pendingAction.type);
+        if (pendingAction.station) params.set('dl_station', pendingAction.station);
+        if (pendingAction.show) params.set('dl_show', pendingAction.show);
+        if (pendingAction.scheduleId) params.set('schedule_id', String(pendingAction.scheduleId));
+    }
+    const rd = '/?' + params.toString();
+    window.location.href = '/oauth2/sign_in?rd=' + encodeURIComponent(rd);
+}
+
+// Replay a pending action after returning from OAuth login
+async function replayPendingAction(params) {
+    const action = params.get('action');
+    if (!action) return;
+
+    const station = params.get('dl_station');
+    const show = params.get('dl_show');
+    const scheduleId = params.get('schedule_id');
+
+    // Clean action params from URL
+    params.delete('action');
+    params.delete('dl_station');
+    params.delete('dl_show');
+    params.delete('schedule_id');
+    updateURL(params);
+
+    // Restore dropdown state for schedule/download actions
+    if ((action === 'schedule' || action === 'download') && station && show) {
+        dlStationSelect.value = station;
+        await loadAllShows(station);
+        renderAllShowsDropdown(dlShowSelect);
+        dlShowSelect.value = show;
+    }
+
+    // Replay the action
+    if (action === 'schedule') {
+        await createSchedule();
+    } else if (action === 'download') {
+        await queueDownload();
+    } else if (action === 'delete-schedule' && scheduleId) {
+        await deleteSchedule(Number(scheduleId));
+    }
 }
 
 // Update page title based on current state
@@ -105,7 +145,8 @@ async function applyURLState() {
 
     // Handle page switching from URL
     if (page === 'downloads') {
-        showPage('downloads');
+        await showPage('downloads');
+        await replayPendingAction(params);
         return;
     }
 
@@ -599,7 +640,7 @@ async function showPage(page) {
         params.set('page', 'downloads');
         updateURL(params);
         // Load data
-        loadDownloadsPageData();
+        await loadDownloadsPageData();
     } else {
         downloadsView.classList.add('hidden');
         mainView.classList.remove('hidden');
@@ -715,7 +756,7 @@ async function queueDownload() {
         });
 
         if (response.status === 401) {
-            handle401();
+            handle401({ type: 'download', station, show });
             showDownloadResult(false, null);
             return;
         } else if (response.status === 409) {
@@ -912,7 +953,7 @@ async function createSchedule() {
         });
 
         if (response.status === 401) {
-            handle401();
+            handle401({ type: 'schedule', station, show });
             return;
         } else if (response.status === 409) {
             showErrorModal('A schedule already exists for this show');
@@ -956,7 +997,7 @@ async function deleteSchedule(id) {
         });
 
         if (response.status === 401) {
-            handle401();
+            handle401({ type: 'delete-schedule', scheduleId: id });
             return;
         } else if (!response.ok) {
             const error = await response.text();
