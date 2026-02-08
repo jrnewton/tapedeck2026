@@ -927,7 +927,17 @@ function renderSchedules() {
         schedulesList.removeChild(schedulesList.firstChild);
     }
 
-    if (state.schedules.length === 0) {
+    const selectedStation = dlStationSelect.value;
+    if (!selectedStation) {
+        const emptyMsg = document.createElement('p');
+        emptyMsg.className = 'empty-message';
+        emptyMsg.textContent = 'Select a station to view scheduled downloads';
+        schedulesList.appendChild(emptyMsg);
+        return;
+    }
+
+    const filtered = state.schedules.filter(s => s.Station === selectedStation);
+    if (filtered.length === 0) {
         const emptyMsg = document.createElement('p');
         emptyMsg.className = 'empty-message';
         emptyMsg.textContent = 'No scheduled downloads';
@@ -935,7 +945,7 @@ function renderSchedules() {
         return;
     }
 
-    state.schedules.forEach(sched => {
+    filtered.forEach(sched => {
         const card = document.createElement('div');
         card.className = 'schedule-card';
 
@@ -1239,6 +1249,7 @@ function setupEventListeners() {
             dlShowSelect.appendChild(opt);
             dlShowSelect.disabled = true;
         }
+        renderSchedules();
     });
 
     // Action buttons
