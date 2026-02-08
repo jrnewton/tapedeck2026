@@ -314,6 +314,14 @@ function getCacheRefreshHandler(url) {
         return (data) => {
             state.downloads = data;
             renderDownloads();
+            // Clear play state if current download no longer exists
+            if (state.currentDownload && !data.some(d => d.ID === state.currentDownload.ID)) {
+                state.currentDownload = null;
+                updateNowPlaying();
+                const params = getURLParams();
+                params.delete('play');
+                updateURL(params);
+            }
         };
     }
     return null;
