@@ -284,8 +284,22 @@ function getCacheRefreshHandler(url) {
     }
     if (url.match(/^\/api\/stations\/[^/]+\/shows$/)) {
         return (data) => {
+            const selectedShow = showSelect.value;
             state.shows = data;
             renderShows();
+            // Preserve selection if show still exists, otherwise clear stale state
+            if (selectedShow && data.some(s => String(s.ID) === selectedShow)) {
+                showSelect.value = selectedShow;
+            } else if (selectedShow) {
+                // Selected show no longer exists - clear stale downloads and URL
+                state.downloads = [];
+                renderDownloads();
+                const params = getURLParams();
+                params.delete('show');
+                params.delete('play');
+                updateURL(params);
+                updatePageTitle();
+            }
         };
     }
     if (url.match(/^\/api\/shows\/\d+\/downloads/)) {
