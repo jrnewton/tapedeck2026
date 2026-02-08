@@ -226,6 +226,16 @@ async function init() {
     await loadStations();
     setupEventListeners();
     await applyURLState();
+
+    // Display app version from SW cache name
+    try {
+        const names = await caches.keys();
+        const current = names.find(n => n.startsWith('tapedeck-'));
+        if (current) {
+            const ver = current.replace('tapedeck-', '');
+            document.getElementById('app-version').textContent = ver;
+        }
+    } catch (_e) { /* caches API unavailable */ }
 }
 
 // Load offline download IDs from IndexedDB
