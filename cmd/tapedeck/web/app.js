@@ -299,9 +299,11 @@ function getCacheRefreshHandler(url) {
             if (selectedShow && data.some(s => String(s.ID) === selectedShow)) {
                 showSelect.value = selectedShow;
             } else if (selectedShow) {
-                // Selected show no longer exists - clear stale downloads and URL
+                // Selected show no longer exists - clear all stale state
                 state.downloads = [];
+                state.currentDownload = null;
                 renderDownloads();
+                updateNowPlaying();
                 const params = getURLParams();
                 params.delete('show');
                 params.delete('play');
