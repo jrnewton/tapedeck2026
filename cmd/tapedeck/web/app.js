@@ -401,8 +401,9 @@ function renderShows() {
 }
 
 function renderDownloads() {
-    if (state.downloads.length === 0) {
-        tapeList.innerHTML = '<p class="empty-message">No completed downloads for this show</p>';
+    if (!state.downloads || state.downloads.length === 0) {
+        const msg = showSelect.value ? 'No completed downloads for this show' : 'Select a show to view downloads';
+        tapeList.innerHTML = `<p class="empty-message">${msg}</p>`;
         return;
     }
 
