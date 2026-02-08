@@ -300,6 +300,7 @@ function getCacheRefreshHandler(url) {
                 showSelect.value = selectedShow;
             } else if (selectedShow) {
                 // Selected show no longer exists - clear all stale state
+                showSelect.value = '';
                 state.downloads = [];
                 state.currentDownload = null;
                 renderDownloads();
@@ -1098,11 +1099,7 @@ function setupEventListeners() {
         }
         state.downloads = [];
         state.currentDownload = null;
-        tapeList.textContent = '';
-        const msg = document.createElement('p');
-        msg.className = 'empty-message';
-        msg.textContent = 'Select a show to view downloads';
-        tapeList.appendChild(msg);
+        renderDownloads();
         updatePageTitle();
     });
 
@@ -1118,11 +1115,7 @@ function setupEventListeners() {
             updateURL(params);
         } else {
             state.downloads = [];
-            tapeList.textContent = '';
-            const msg = document.createElement('p');
-            msg.className = 'empty-message';
-            msg.textContent = 'Select a show to view downloads';
-            tapeList.appendChild(msg);
+            renderDownloads();
             // Keep only station in URL
             const params = new URLSearchParams();
             const station = stationSelect.value;
