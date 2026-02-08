@@ -757,7 +757,6 @@ async function queueDownload() {
 
         if (response.status === 401) {
             handle401({ type: 'download', station, show });
-            showDownloadResult(false, null);
             return;
         } else if (response.status === 409) {
             showErrorModal('This episode is already downloaded or queued');
