@@ -184,11 +184,11 @@ DONE: Filter scheduled downloads by selected station
     - Schedules list filtered by dlStationSelect value
     - "Select a station to view scheduled downloads" when no station selected
     - Re-renders on station dropdown change
-TODO: setup playwright and playwright mcp
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days
     - merge "rebroadcast" show and regular show into same show
+TODO: setup playwright and playwright mcp
 TODO: Have a "share" button that copies URL to current playing song.
 TODO: Review all test cases and test coverage.
 TODO: Implement backend CLI for WHRB
