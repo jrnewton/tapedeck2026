@@ -1136,13 +1136,6 @@ function setupEventListeners() {
     btnPlay.addEventListener('click', togglePlay);
     btnBack.addEventListener('click', () => {
         audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 10);
-        // Brief rewind animation
-        leftReel.classList.add('rewinding');
-        rightReel.classList.add('rewinding');
-        setTimeout(() => {
-            leftReel.classList.remove('rewinding');
-            rightReel.classList.remove('rewinding');
-        }, 500);
     });
     btnFwd.addEventListener('click', () => {
         audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 30);
