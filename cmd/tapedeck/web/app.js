@@ -604,7 +604,7 @@ function updatePlayButton() {
 async function togglePlay() {
     if (!state.currentDownload) {
         // If no download selected, play first one
-        if (state.downloads.length > 0) {
+        if (state.downloads && state.downloads.length > 0) {
             playDownload(state.downloads[0]);
         }
         return;
