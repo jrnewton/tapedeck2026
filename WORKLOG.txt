@@ -184,6 +184,12 @@ DONE: Filter scheduled downloads by selected station
     - Schedules list filtered by dlStationSelect value
     - "Select a station to view scheduled downloads" when no station selected
     - Re-renders on station dropdown change
+DONE: Return proper 404/403 for invalid routes
+    - Root (/) serves index.html for SPA query-param routing
+    - Real files served normally with cache headers
+    - Real directories return 403 Forbidden (no directory listing)
+    - Missing files/paths return 404 Not Found
+    - Previously all unmatched paths fell back to index.html (200)
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days

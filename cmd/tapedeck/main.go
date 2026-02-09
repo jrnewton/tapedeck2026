@@ -18,28 +18,39 @@ import (
 )
 
 // spaHandler returns an HTTP handler that serves static files from a
-// filesystem, falling back to index.html for paths that don't match a file.
-// This enables client-side routing for the single-page application.
+// filesystem. The root path "/" serves index.html (the SPA uses query-param
+// routing). Real directories return 403 (no directory listing). Missing
+// files return 404.
 func spaHandler(webFS fs.FS) http.Handler {
 	fileServer := http.FileServer(http.FS(webFS))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Try to serve the file directly
 		path := r.URL.Path
+
+		// Root path serves index.html (SPA uses query-param routing)
 		if path == "/" {
-			path = "/index.html"
+			setCacheHeaders(w, "/index.html")
+			fileServer.ServeHTTP(w, r)
+			return
 		}
 
-		// Check if file exists (strip leading slash for fs.Stat)
-		if _, err := fs.Stat(webFS, path[1:]); err == nil {
+		// Strip leading slash and trailing slash for fs operations
+		fsPath := strings.TrimSuffix(path[1:], "/")
+
+		// Check if path is a real directory — return 403 (no listing)
+		if info, err := fs.Stat(webFS, fsPath); err == nil && info.IsDir() {
+			http.Error(w, "403 Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Check if path is a real file — serve it
+		if info, err := fs.Stat(webFS, fsPath); err == nil && !info.IsDir() {
 			setCacheHeaders(w, path)
 			fileServer.ServeHTTP(w, r)
 			return
 		}
 
-		// Fallback to index.html for SPA routing
-		setCacheHeaders(w, "/index.html")
-		r.URL.Path = "/"
-		fileServer.ServeHTTP(w, r)
+		// Everything else is 404
+		http.NotFound(w, r)
 	})
 }
 
