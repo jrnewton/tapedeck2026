@@ -25,13 +25,7 @@ type Show struct {
 	Name      string
 	CachedAt  time.Time
 	Active    bool
-	// Denormalized archive data (current and previous)
-	ArchiveCurrentDate    *time.Time
-	ArchiveCurrentM3UURL  string
-	ArchivePreviousDate   *time.Time
-	ArchivePreviousM3UURL string
 }
-
 
 // Download status constants.
 const (
@@ -107,153 +101,12 @@ func Open(path string) (*DB, error) {
 	}
 
 	db := &DB{pool: pool}
-	if err := db.migrate(); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("migrate: %w", err)
-	}
-
 	return db, nil
 }
 
 // Close closes the database connection pool.
 func (db *DB) Close() error {
 	return db.pool.Close()
-}
-
-func (db *DB) migrate() error {
-	conn, err := db.pool.Take(context.Background())
-	if err != nil {
-		return err
-	}
-	defer db.pool.Put(conn)
-
-	const schema = `
-		CREATE TABLE IF NOT EXISTS stations (
-			id INTEGER PRIMARY KEY,
-			call_sign TEXT UNIQUE NOT NULL,
-			name TEXT,
-			archive_url TEXT,
-			timezone TEXT NOT NULL DEFAULT 'America/New_York'
-		);
-
-		CREATE TABLE IF NOT EXISTS shows (
-			id INTEGER PRIMARY KEY,
-			station_id INTEGER NOT NULL REFERENCES stations(id),
-			name TEXT NOT NULL,
-			cached_at TEXT NOT NULL,
-			UNIQUE(station_id, name)
-		);
-
-		CREATE TABLE IF NOT EXISTS downloads (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			station_id INTEGER NOT NULL REFERENCES stations(id),
-			show_id INTEGER REFERENCES shows(id),
-			archive_date TEXT NOT NULL,
-			m3u_url TEXT NOT NULL,
-			filepath TEXT,
-			status TEXT NOT NULL DEFAULT 'pending',
-			error TEXT,
-			created_at TEXT NOT NULL DEFAULT (datetime('now')),
-			updated_at TEXT
-		);
-
-		CREATE TABLE IF NOT EXISTS schedules (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			station_id INTEGER NOT NULL REFERENCES stations(id),
-			show_id INTEGER NOT NULL REFERENCES shows(id),
-			cron_expression TEXT NOT NULL,
-			enabled INTEGER NOT NULL DEFAULT 1,
-			last_run_at TEXT,
-			last_status TEXT,
-			last_error TEXT,
-			retry_count INTEGER NOT NULL DEFAULT 0,
-			next_retry_at TEXT,
-			next_run_at TEXT,
-			created_at TEXT NOT NULL DEFAULT (datetime('now')),
-			updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-			UNIQUE(station_id, show_id)
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_shows_station ON shows(station_id);
-		CREATE INDEX IF NOT EXISTS idx_downloads_station ON downloads(station_id);
-		CREATE INDEX IF NOT EXISTS idx_downloads_status ON downloads(status);
-		CREATE INDEX IF NOT EXISTS idx_schedules_next_run ON schedules(next_run_at);
-		CREATE INDEX IF NOT EXISTS idx_schedules_enabled ON schedules(enabled);
-	`
-	if err := sqlitex.ExecuteScript(conn, schema, nil); err != nil {
-		return err
-	}
-
-	// Migration: add active column to shows if not exists
-	// SQLite doesn't support IF NOT EXISTS for ALTER TABLE, so we check first
-	var hasActive bool
-	err = sqlitex.Execute(conn, `SELECT 1 FROM pragma_table_info('shows') WHERE name='active'`, &sqlitex.ExecOptions{
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			hasActive = true
-			return nil
-		},
-	})
-	if err != nil {
-		return err
-	}
-	if !hasActive {
-		if err := sqlitex.Execute(conn, `ALTER TABLE shows ADD COLUMN active INTEGER NOT NULL DEFAULT 1`, nil); err != nil {
-			return err
-		}
-	}
-
-	// Migration: add denormalized archive columns to shows
-	var hasArchiveCurrent bool
-	err = sqlitex.Execute(conn, `SELECT 1 FROM pragma_table_info('shows') WHERE name='archive_current_date'`, &sqlitex.ExecOptions{
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			hasArchiveCurrent = true
-			return nil
-		},
-	})
-	if err != nil {
-		return err
-	}
-	if !hasArchiveCurrent {
-		// Add all 4 archive columns
-		archiveColumns := []string{
-			`ALTER TABLE shows ADD COLUMN archive_current_date TEXT`,
-			`ALTER TABLE shows ADD COLUMN archive_current_m3u_url TEXT`,
-			`ALTER TABLE shows ADD COLUMN archive_previous_date TEXT`,
-			`ALTER TABLE shows ADD COLUMN archive_previous_m3u_url TEXT`,
-		}
-		for _, sql := range archiveColumns {
-			if err := sqlitex.Execute(conn, sql, nil); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Migration: drop unused archives table
-	if err := sqlitex.Execute(conn, `DROP TABLE IF EXISTS archives`, nil); err != nil {
-		return err
-	}
-	if err := sqlitex.Execute(conn, `DROP INDEX IF EXISTS idx_archives_show`, nil); err != nil {
-		return err
-	}
-
-	// Migration: add timezone column to stations
-	var hasTimezone bool
-	err = sqlitex.Execute(conn, `SELECT 1 FROM pragma_table_info('stations') WHERE name='timezone'`, &sqlitex.ExecOptions{
-		ResultFunc: func(stmt *sqlite.Stmt) error {
-			hasTimezone = true
-			return nil
-		},
-	})
-	if err != nil {
-		return err
-	}
-	if !hasTimezone {
-		if err := sqlitex.Execute(conn, `ALTER TABLE stations ADD COLUMN timezone TEXT NOT NULL DEFAULT 'America/New_York'`, nil); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // ListStations returns all registered stations.
@@ -375,23 +228,11 @@ func (db *DB) GetShows(stationID int64) ([]Show, error) {
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
 			show := Show{
-				ID:                    stmt.ColumnInt64(0),
-				StationID:             stmt.ColumnInt64(1),
-				Name:                  stmt.ColumnText(2),
-				CachedAt:              cachedAt,
-				Active:                stmt.ColumnInt(4) == 1,
-				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
-				ArchivePreviousM3UURL: stmt.ColumnText(8),
-			}
-			if stmt.ColumnType(5) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
-					show.ArchiveCurrentDate = &d
-				}
-			}
-			if stmt.ColumnType(7) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
-					show.ArchivePreviousDate = &d
-				}
+				ID:        stmt.ColumnInt64(0),
+				StationID: stmt.ColumnInt64(1),
+				Name:      stmt.ColumnText(2),
+				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			}
 			shows = append(shows, show)
 			return nil
@@ -425,23 +266,11 @@ func (db *DB) ListShowsWithDownloads(stationID int64) ([]Show, error) {
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
 			show := Show{
-				ID:                    stmt.ColumnInt64(0),
-				StationID:             stmt.ColumnInt64(1),
-				Name:                  stmt.ColumnText(2),
-				CachedAt:              cachedAt,
-				Active:                stmt.ColumnInt(4) == 1,
-				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
-				ArchivePreviousM3UURL: stmt.ColumnText(8),
-			}
-			if stmt.ColumnType(5) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
-					show.ArchiveCurrentDate = &d
-				}
-			}
-			if stmt.ColumnType(7) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
-					show.ArchivePreviousDate = &d
-				}
+				ID:        stmt.ColumnInt64(0),
+				StationID: stmt.ColumnInt64(1),
+				Name:      stmt.ColumnText(2),
+				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			}
 			shows = append(shows, show)
 			return nil
@@ -489,23 +318,11 @@ func (db *DB) GetShowByID(showID int64) (*Show, error) {
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
 			show = &Show{
-				ID:                    stmt.ColumnInt64(0),
-				StationID:             stmt.ColumnInt64(1),
-				Name:                  stmt.ColumnText(2),
-				CachedAt:              cachedAt,
-				Active:                stmt.ColumnInt(4) == 1,
-				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
-				ArchivePreviousM3UURL: stmt.ColumnText(8),
-			}
-			if stmt.ColumnType(5) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
-					show.ArchiveCurrentDate = &d
-				}
-			}
-			if stmt.ColumnType(7) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
-					show.ArchivePreviousDate = &d
-				}
+				ID:        stmt.ColumnInt64(0),
+				StationID: stmt.ColumnInt64(1),
+				Name:      stmt.ColumnText(2),
+				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			}
 			return nil
 		},
@@ -531,23 +348,11 @@ func (db *DB) GetShowByName(stationID int64, name string) (*Show, error) {
 		ResultFunc: func(stmt *sqlite.Stmt) error {
 			cachedAt, _ := time.Parse(time.RFC3339, stmt.ColumnText(3))
 			show = &Show{
-				ID:                    stmt.ColumnInt64(0),
-				StationID:             stmt.ColumnInt64(1),
-				Name:                  stmt.ColumnText(2),
-				CachedAt:              cachedAt,
-				Active:                stmt.ColumnInt(4) == 1,
-				ArchiveCurrentM3UURL:  stmt.ColumnText(6),
-				ArchivePreviousM3UURL: stmt.ColumnText(8),
-			}
-			if stmt.ColumnType(5) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(5)); parseErr == nil {
-					show.ArchiveCurrentDate = &d
-				}
-			}
-			if stmt.ColumnType(7) != sqlite.TypeNull {
-				if d, parseErr := time.Parse("2006-01-02", stmt.ColumnText(7)); parseErr == nil {
-					show.ArchivePreviousDate = &d
-				}
+				ID:        stmt.ColumnInt64(0),
+				StationID: stmt.ColumnInt64(1),
+				Name:      stmt.ColumnText(2),
+				CachedAt:  cachedAt,
+				Active:    stmt.ColumnInt(4) == 1,
 			}
 			return nil
 		},
