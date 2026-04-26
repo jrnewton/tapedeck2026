@@ -196,6 +196,11 @@ DONE: Fix all open security vulnerabilities
     - go.mod: added `toolchain go1.25.9` to pull in patched stdlib
       (fixes 5 govulncheck findings: x509, tls, os, net/url)
     - Verified: npm audit, govulncheck, go test, eslint all clean
+DONE: Upgrade to Go 1.26.2 (latest stable)
+    - go.mod: go 1.26.2 (toolchain directive folded in by `go mod tidy`)
+    - Dockerfile: golang:1.25-alpine -> golang:1.26-alpine
+    - All binaries (local + cross-compiled prod) built with go1.26.2
+    - Verified: govulncheck, go test, eslint, full `make build` all clean
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days

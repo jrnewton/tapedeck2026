@@ -1,8 +1,6 @@
 module local/tapedeck
 
-go 1.25.7
-
-toolchain go1.25.9
+go 1.26.2
 
 require (
 	github.com/robfig/cron/v3 v3.0.1
