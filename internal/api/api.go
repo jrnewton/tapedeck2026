@@ -81,6 +81,7 @@ func (s *Server) handleListStations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, stations)
 }
 
+// CLAUDE: rename to handleListShowsWithDownload
 // handleListShows returns shows for a station that have at least one download.
 func (s *Server) handleListShows(w http.ResponseWriter, r *http.Request) {
 	callSign := strings.ToUpper(r.PathValue("call"))
@@ -111,6 +112,7 @@ func (s *Server) handleListShows(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, shows)
 }
 
+// CLAUDE: this will fetch only from database but not join to downloads table.
 // handleListAllShows returns ALL shows from the station adapter (not just shows with downloads).
 func (s *Server) handleListAllShows(w http.ResponseWriter, r *http.Request) {
 	callSign := strings.ToUpper(r.PathValue("call"))
@@ -192,6 +194,7 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 	// Get archive (latest or by date)
 	var archive *tapedeck.Archive
 	if req.Date == "latest" {
+		//CLAUDE: this will fetch from new SHOW_ARCHIVES table only.
 		archive, err = adapter.GetLatestArchive(req.Show)
 		if err != nil {
 			http.Error(w, "failed to get latest archive: "+err.Error(), http.StatusNotFound)
@@ -205,6 +208,7 @@ func (s *Server) handleQueueDownload(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		//CLAUDE: this will fetch from new SHOW_ARCHIVES table only.
 		archives, listErr := adapter.ListArchives(req.Show)
 		if listErr != nil {
 			http.Error(w, "failed to list archives: "+listErr.Error(), http.StatusInternalServerError)
@@ -475,6 +479,7 @@ func (s *Server) handleCreateSchedule(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "cannot determine schedule: unknown station", http.StatusBadRequest)
 			return
 		}
+		//CLAUDE: this will fetch from SHOWS table, new columns for schedule. no adapter.
 		schedule, schedErr := adapter.GetShowSchedule(req.Show)
 		if schedErr != nil {
 			http.Error(w, "cannot determine schedule: "+schedErr.Error(), http.StatusBadRequest)
