@@ -190,6 +190,12 @@ DONE: Return proper 404/403 for invalid routes
     - Real directories return 403 Forbidden (no directory listing)
     - Missing files/paths return 404 Not Found
     - Previously all unmatched paths fell back to index.html (200)
+DONE: Fix all open security vulnerabilities
+    - npm audit fix: ajv 6.12.6->6.15.0, brace-expansion 1.1.12->1.1.14,
+      flatted 3.3.3->3.4.2, minimatch 3.1.2->3.1.5 (clears 6 Dependabot alerts)
+    - go.mod: added `toolchain go1.25.9` to pull in patched stdlib
+      (fixes 5 govulncheck findings: x509, tls, os, net/url)
+    - Verified: npm audit, govulncheck, go test, eslint all clean
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days
