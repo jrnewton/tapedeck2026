@@ -201,6 +201,10 @@ DONE: Upgrade to Go 1.26.2 (latest stable)
     - Dockerfile: golang:1.25-alpine -> golang:1.26-alpine
     - All binaries (local + cross-compiled prod) built with go1.26.2
     - Verified: govulncheck, go test, eslint, full `make build` all clean
+DONE: Update npm lockfile deps (clears js-yaml DoS advisory)
+    - npm update: js-yaml 4.1.1->4.3.0, flatted 3.3.3->3.4.2, minimatch 3.1.2->3.1.5
+    - eslint stayed on 9.x (no major bump); npm audit clean, lint passes
+    - Supersedes/closes dependabot PRs #6, #5, #3
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days
