@@ -205,6 +205,11 @@ DONE: Update npm lockfile deps (clears js-yaml DoS advisory)
     - npm update: js-yaml 4.1.1->4.3.0, flatted 3.3.3->3.4.2, minimatch 3.1.2->3.1.5
     - eslint stayed on 9.x (no major bump); npm audit clean, lint passes
     - Supersedes/closes dependabot PRs #6, #5, #3
+DONE: Upgrade ESLint to v10 (major)
+    - eslint ^9.39.2 -> ^10.6.0
+    - eslint-plugin-security ^3.0.1 -> ^4.0.1 (v3 uses removed context.getSourceCode())
+    - make lint-js passes, 14 security rules active, npm audit clean
+    - Supersedes/closes dependabot PR #1
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days
