@@ -210,6 +210,10 @@ DONE: Upgrade ESLint to v10 (major)
     - eslint-plugin-security ^3.0.1 -> ^4.0.1 (v3 uses removed context.getSourceCode())
     - make lint-js passes, 14 security rules active, npm audit clean
     - Supersedes/closes dependabot PR #1
+DONE: Fix Go stdlib + x/net vulnerabilities (govulncheck)
+    - go toolchain 1.26.2 -> 1.26.4 (net, net/http, net/textproto, crypto/x509 CVEs)
+    - golang.org/x/net v0.49.0 -> v0.55.0 (6 advisories)
+    - govulncheck: No vulnerabilities found; go test + make build all clean
 TODO: build CLI for "station refresh" which will refresh station data
     - need archive table with historical archive dates _and_ times
     - must handle shows that occur on multiple days
